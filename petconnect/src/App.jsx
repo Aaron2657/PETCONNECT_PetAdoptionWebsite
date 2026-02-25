@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import PostPet from './pages/PostPet'; // Added this import
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/post-pet" element={<PostPet />} /> {/* Added this route */}
               {/* <Route path="/browse" element={<BrowsePets />} /> */}
             </Routes>
           </main>

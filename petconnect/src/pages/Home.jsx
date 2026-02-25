@@ -18,7 +18,7 @@ const Home = () => {
           Browse Pets
         </Link>
         <Link 
-          to="/login" 
+          to="/post-pet" 
           className="bg-tertiary text-primary w-full sm:w-auto px-6 py-3 rounded-lg shadow hover:bg-opacity-90 transition font-medium"
         >
           Post a Rescued Pet
