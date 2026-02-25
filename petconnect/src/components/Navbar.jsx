@@ -30,16 +30,21 @@ const Navbar = () => {
           <Link to="/browse" className="hover:text-tertiary transition">Browse Pets</Link>
           
           {currentUser ? (
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-tertiary border-l border-gray-400 pl-4">
-                {currentUser.displayName || currentUser.email}
-              </span>
-              <button 
-                onClick={handleLogout} 
-                className="bg-red-500 text-white px-4 py-2 rounded-md font-semibold hover:bg-red-600 transition"
-              >
-                Log Out
-              </button>
+            <div className="flex items-center space-x-6">
+              {/* NEW DASHBOARD LINK */}
+              <Link to="/dashboard" className="text-tertiary font-bold hover:text-white transition">Dashboard</Link>
+              
+              <div className="flex items-center space-x-4 border-l border-gray-400 pl-6">
+                <span className="text-sm text-gray-300">
+                  {currentUser.displayName || currentUser.email}
+                </span>
+                <button 
+                  onClick={handleLogout} 
+                  className="bg-red-500 text-white px-4 py-2 rounded-md font-semibold hover:bg-red-600 transition text-sm"
+                >
+                  Log Out
+                </button>
+              </div>
             </div>
           ) : (
             <Link to="/login" className="bg-secondary text-primary px-4 py-2 rounded-md font-semibold hover:bg-opacity-90 transition whitespace-nowrap">
@@ -67,7 +72,10 @@ const Navbar = () => {
           
           {currentUser ? (
              <>
-               <span className="block text-tertiary px-2 py-1 text-sm border-t border-gray-600 pt-2 mt-2">
+               {/* NEW MOBILE DASHBOARD LINK */}
+               <Link to="/dashboard" className="block text-tertiary font-bold hover:bg-gray-700 px-2 py-1 rounded">Dashboard</Link>
+               
+               <span className="block text-gray-300 px-2 py-1 text-sm border-t border-gray-600 pt-2 mt-2">
                  Logged in as: {currentUser.displayName || currentUser.email}
                </span>
                <button 

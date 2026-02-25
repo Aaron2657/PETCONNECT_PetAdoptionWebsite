@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../config/firebase'; // Notice we removed storage from this import
+import { db } from '../config/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,11 +44,9 @@ export default function PostPet() {
       const formData = new FormData();
       formData.append('file', image);
       
-      // TODO: Replace with the exact preset name you created in Step 2
+    
       formData.append('upload_preset', 'petconnect_uploads'); 
 
-      // 2. Upload to Cloudinary
-      // TODO: Replace 'YOUR_CLOUD_NAME' in the URL below with your actual Cloud Name from Step 1
       const cloudinaryResponse = await fetch(
         'https://api.cloudinary.com/v1_1/drvxsajim/image/upload',
         {
@@ -63,10 +61,10 @@ export default function PostPet() {
          throw new Error(cloudinaryData.error?.message || 'Image upload failed');
       }
 
-      // This is the clean, public URL to your newly uploaded image!
+      // public URL to uploaded image!
       const imageUrl = cloudinaryData.secure_url;
 
-      // 3. Save the pet data + the new Cloudinary image URL to Firebase Firestore
+      // Save the pet data + the new Cloudinary image URL to Firebase Firestore
       await addDoc(collection(db, 'pets'), {
         name,
         species,
@@ -80,7 +78,7 @@ export default function PostPet() {
         createdAt: serverTimestamp()
       });
 
-      // 4. Success! Redirect to home
+      //Redirect to home
       navigate('/');
     } catch (err) {
       console.error(err);

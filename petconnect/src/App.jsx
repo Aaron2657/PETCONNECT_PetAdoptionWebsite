@@ -4,7 +4,11 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import PostPet from './pages/PostPet'; // Added this import
+import PostPet from './pages/PostPet';
+import BrowsePets from './pages/BrowsePets';
+import PetDetails from './pages/PetDetails';
+import AdoptionRequest from './pages/AdoptionRequest';
+import UserDashboard from './pages/UserDashboard';
 
 function App() {
   return (
@@ -17,8 +21,11 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
-              <Route path="/post-pet" element={<PostPet />} /> {/* Added this route */}
-              {/* <Route path="/browse" element={<BrowsePets />} /> */}
+              <Route path="/post-pet" element={<PostPet />} />
+              <Route path="/browse" element={<BrowsePets />} /> 
+              <Route path="/pet/:id" element={<PetDetails />} />
+              <Route path="/adopt/:id" element={<AdoptionRequest />} />
+              <Route path="/dashboard" element={<UserDashboard />} />
             </Routes>
           </main>
         </div>
