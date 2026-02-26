@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; // Added query tools
 import { db } from '../config/firebase';
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 
 export default function PetDetails() {
   const { id } = useParams();
-  const { currentUser } = useAuth(); // <-- Added this to check who is viewing!
+  const { currentUser } = useAuth(); 
   
   const [pet, setPet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // NEW STATE: Keeps track of whether this user is approved
+  const [isApprovedAdopter, setIsApprovedAdopter] = useState(false);
 
   useEffect(() => {
-    const fetchPet = async () => {
+    const fetchPetAndStatus = async () => {
       try {
+        // 1. Fetch the Pet's data
         const docRef = doc(db, 'pets', id);
         const docSnap = await getDoc(docRef);
 
@@ -22,17 +26,35 @@ export default function PetDetails() {
           setPet({ id: docSnap.id, ...docSnap.data() });
         } else {
           setError("Pet not found! They may have been removed.");
+          setLoading(false);
+          return; // Stop running if there's no pet
+        }
+
+        // 2. Check if the current user has an APPROVED application for this pet
+        if (currentUser) {
+          const statusQuery = query(
+            collection(db, 'adoptionRequests'),
+            where('petId', '==', id),
+            where('adopterId', '==', currentUser.uid),
+            where('status', '==', 'Approved')
+          );
+          const statusSnap = await getDocs(statusQuery);
+          
+          // If the query finds a match, they are approved!
+          if (!statusSnap.empty) {
+            setIsApprovedAdopter(true);
+          }
         }
       } catch (err) {
-        console.error("Error fetching pet details:", err);
+        console.error("Error fetching data:", err);
         setError("Failed to load pet details.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPet();
-  }, [id]);
+    fetchPetAndStatus();
+  }, [id, currentUser]);
 
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading pet details...</div>;
   if (error) return <div className="text-center mt-20 text-red-500 text-xl font-semibold">{error}</div>;
@@ -68,28 +90,35 @@ export default function PetDetails() {
             {pet.description}
           </p>
           
-    
           <div className="bg-blue-50 p-4 rounded-md border border-blue-100 mb-6">
             <h4 className="font-bold text-primary mb-2">Rescuer Information</h4>
             <p className="text-sm text-gray-700 mb-1"><strong>Posted By:</strong> {pet.rescuerName || 'Anonymous'}</p>
             <p className="text-sm text-gray-700 flex items-center space-x-2 mt-1 overflow-hidden">
-                <strong>Contact:</strong> 
-                {currentUser && currentUser.uid === pet.rescuerId ? (
-                    <span className="truncate">{pet.rescuerEmail}</span>
-                ) : (
-                    <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
-                    Hidden until approved
-                    </span>
-                )}
+              <strong>Contact:</strong> 
+              {/* UPDATED LOGIC: Show email if they are the rescuer OR if they are an approved adopter! */}
+              {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) ? (
+                <span className="truncate">{pet.rescuerEmail}</span>
+              ) : (
+                <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
+                  Hidden until approved
+                </span>
+              )}
             </p>
           </div>
           
-          <Link 
-            to={`/adopt/${pet.id}`} 
-            className="block text-center w-full bg-secondary text-primary font-bold text-lg py-3 rounded hover:bg-opacity-90 transition mt-auto shadow-sm"
-          >
-            Submit Adoption Request
-          </Link>
+          {/* UPDATED LOGIC: Change the bottom button if they are approved */}
+          {isApprovedAdopter ? (
+             <div className="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mt-auto text-center font-bold">
+               🎉 You are approved to adopt {pet.name}! Please contact the rescuer to finalize.
+             </div>
+          ) : (
+            <Link 
+              to={`/adopt/${pet.id}`} 
+              className="block text-center w-full bg-secondary text-primary font-bold text-lg py-3 rounded hover:bg-opacity-90 transition mt-auto shadow-sm"
+            >
+              Submit Adoption Request
+            </Link>
+          )}
         </div>
       </div>
     </div>

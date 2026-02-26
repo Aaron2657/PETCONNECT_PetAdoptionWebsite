@@ -1,35 +1,30 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 
 export default function UserDashboard() {
   const { currentUser } = useAuth();
   
-  // State for our three different lists
   const [myPets, setMyPets] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
   const [sentRequests, setSentRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // If no one is logged in, don't try to fetch data
     if (!currentUser) return;
 
     const fetchDashboardData = async () => {
       try {
-        // 1. Fetch Pets posted by this specific user
         const petsQuery = query(collection(db, 'pets'), where('rescuerId', '==', currentUser.uid));
         const petsSnap = await getDocs(petsQuery);
         setMyPets(petsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-        // 2. Fetch Applications received by this user (people wanting to adopt their pets)
         const receivedQuery = query(collection(db, 'adoptionRequests'), where('rescuerId', '==', currentUser.uid));
         const receivedSnap = await getDocs(receivedQuery);
         setReceivedRequests(receivedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-        // 3. Fetch Applications sent by this user (pets they want to adopt)
         const sentQuery = query(collection(db, 'adoptionRequests'), where('adopterId', '==', currentUser.uid));
         const sentSnap = await getDocs(sentQuery);
         setSentRequests(sentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -44,13 +39,38 @@ export default function UserDashboard() {
     fetchDashboardData();
   }, [currentUser]);
 
-  if (!currentUser) {
-    return <div className="text-center mt-20 text-xl font-bold text-primary">Please log in to view your dashboard.</div>;
-  }
+  // Handle Application Status (Accept/Reject)
+  const handleUpdateStatus = async (requestId, newStatus) => {
+    try {
+      const requestRef = doc(db, 'adoptionRequests', requestId);
+      await updateDoc(requestRef, { status: newStatus });
+      setReceivedRequests(prevRequests =>
+        prevRequests.map(req => req.id === requestId ? { ...req, status: newStatus } : req)
+      );
+    } catch (error) {
+      console.error("Error updating application status:", error);
+      alert("Failed to update the application. Please try again.");
+    }
+  };
 
-  if (loading) {
-    return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading your command center...</div>;
-  }
+  // NEW FUNCTION: Handle Pet Status (Available/Pending/Adopted)
+  const handleUpdatePetStatus = async (petId, newStatus) => {
+    try {
+      const petRef = doc(db, 'pets', petId);
+      await updateDoc(petRef, { status: newStatus });
+      
+      // Update the screen instantly
+      setMyPets(prevPets => 
+        prevPets.map(pet => pet.id === petId ? { ...pet, status: newStatus } : pet)
+      );
+    } catch (error) {
+      console.error("Error updating pet status:", error);
+      alert("Failed to update pet status.");
+    }
+  };
+
+  if (!currentUser) return <div className="text-center mt-20 text-xl font-bold text-primary">Please log in to view your dashboard.</div>;
+  if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading your command center...</div>;
 
   return (
     <div className="container mx-auto mt-10 mb-10 px-4 max-w-5xl">
@@ -65,11 +85,34 @@ export default function UserDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {myPets.map(pet => (
               <div key={pet.id} className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-tertiary flex items-center space-x-4">
-                <img src={pet.imageUrl} alt={pet.name} className="w-20 h-20 object-cover rounded-md" />
-                <div>
+                <img src={pet.imageUrl} alt={pet.name} className="w-24 h-24 object-cover rounded-md" />
+                <div className="flex-grow">
                   <h4 className="font-bold text-lg text-primary">{pet.name}</h4>
-                  <p className="text-sm text-gray-600 mb-1">Status: <span className="font-semibold text-green-600">{pet.status}</span></p>
-                  <Link to={`/pet/${pet.id}`} className="text-secondary text-sm font-bold hover:underline">View Public Profile</Link>
+                  
+                  {/* NEW LOGIC: Dynamic Status Color */}
+                  <p className="text-sm text-gray-600 mb-2">Status: 
+                    <span className={`ml-1 font-bold ${
+                      pet.status === 'Adopted' ? 'text-secondary' : 
+                      pet.status === 'Pending' ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                      {pet.status || 'Available'}
+                    </span>
+                  </p>
+                  
+                  {/* NEW DROPDOWN: Change Pet Status */}
+                  <div className="flex flex-col space-y-2 mt-2">
+                    <select 
+                      value={pet.status || 'Available'}
+                      onChange={(e) => handleUpdatePetStatus(pet.id, e.target.value)}
+                      className="text-sm border border-gray-300 rounded px-2 py-1 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tertiary w-full max-w-[150px]"
+                    >
+                      <option value="Available">Available</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Adopted">Adopted</option>
+                    </select>
+                    
+                    <Link to={`/pet/${pet.id}`} className="text-tertiary text-sm font-bold hover:underline">View Public Profile</Link>
+                  </div>
                 </div>
               </div>
             ))}
@@ -91,16 +134,38 @@ export default function UserDashboard() {
                     <h4 className="font-bold text-lg text-primary">Application for {req.petName}</h4>
                     <p className="text-sm text-gray-600"><strong>From:</strong> {req.adopterName} ({req.adopterEmail})</p>
                   </div>
-                  <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">{req.status}</span>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
+                    ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                      req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
+                      'bg-yellow-100 text-yellow-800'}`}>
+                    {req.status}
+                  </span>
                 </div>
                 
-                <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-2">
+                <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
                   <p className="text-sm text-gray-700"><strong>Message:</strong> "{req.message}"</p>
                 </div>
-                <div className="flex space-x-6 text-sm text-gray-600">
+                <div className="flex space-x-6 text-sm text-gray-600 mb-4">
                   <span><strong>Living Situation:</strong> {req.livingSituation}</span>
                   <span><strong>Other Pets:</strong> {req.hasOtherPets}</span>
                 </div>
+
+                {req.status === 'Pending' && (
+                  <div className="flex space-x-3 border-t pt-4">
+                    <button 
+                      onClick={() => handleUpdateStatus(req.id, 'Approved')}
+                      className="bg-green-500 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-600 transition shadow-sm"
+                    >
+                      Accept Application
+                    </button>
+                    <button 
+                      onClick={() => handleUpdateStatus(req.id, 'Rejected')}
+                      className="bg-red-500 text-white px-4 py-2 rounded text-sm font-bold hover:bg-red-600 transition shadow-sm"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -120,7 +185,12 @@ export default function UserDashboard() {
                   <h4 className="font-bold text-primary">Applied for: {req.petName}</h4>
                   <p className="text-sm text-gray-500">Message: {req.message.substring(0, 60)}...</p>
                 </div>
-                <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">{req.status}</span>
+                 <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
+                    ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                      req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
+                      'bg-yellow-100 text-yellow-800'}`}>
+                    {req.status}
+                  </span>
               </div>
             ))}
           </div>
