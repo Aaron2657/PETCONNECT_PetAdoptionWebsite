@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom'; // NEW: Added useNavigate
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 export default function UserProfile() {
   const { id } = useParams(); 
   const { currentUser } = useAuth(); 
+  const navigate = useNavigate(); // NEW: Initialize navigate
   
   const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '', isBanned: false });
   const [pets, setPets] = useState([]);
@@ -86,6 +87,22 @@ export default function UserProfile() {
 
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading profile...</div>;
 
+  // NEW: Completely block access for guests!
+  if (!currentUser) {
+    return (
+      <div className="text-center mt-20 px-4">
+        <h2 className="text-2xl text-primary font-bold">Please log in to view user profiles.</h2>
+        <p className="text-gray-600 mt-2">We keep our rescuers' profiles secure for registered users only.</p>
+        <button 
+          onClick={() => navigate('/login')} 
+          className="mt-6 bg-secondary text-primary px-8 py-3 rounded-md font-bold hover:bg-opacity-90 transition shadow-sm"
+        >
+          Log In
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto mt-10 mb-10 px-4">
       
@@ -116,7 +133,6 @@ export default function UserProfile() {
            <p className="text-gray-500 mt-2 font-medium">Dedicated PetConnect Rescuer</p>
         )}
 
-        {/* NEW: Show Edit Profile button if this is the current user's profile! */}
         {currentUser && currentUser.uid === id && (
           <Link 
             to="/edit-profile" 
