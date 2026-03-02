@@ -12,6 +12,7 @@ import UserDashboard from './pages/UserDashboard';
 import UserProfile from './pages/UserProfile';
 import EditProfile from './pages/EditProfile';
 import EditPet from './pages/EditPet';
+import AdminDashboard from './pages/AdminDashboard'; // Add this import at the top
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/edit-profile" element={<EditProfile />} />
               <Route path="/edit-pet/:id" element={<EditPet />} />
+              <Route path="/admin" element={<AdminDashboard />} />
             </Routes>
           </main>
         </div>

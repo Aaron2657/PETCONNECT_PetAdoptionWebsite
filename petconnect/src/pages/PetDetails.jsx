@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; // Added query tools
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,28 +9,34 @@ export default function PetDetails() {
   const { currentUser } = useAuth(); 
   
   const [pet, setPet] = useState(null);
+  const [rescuerPhone, setRescuerPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  // NEW STATE: Keeps track of whether this user is approved
   const [isApprovedAdopter, setIsApprovedAdopter] = useState(false);
+
+  // NEW: State to track which image in the carousel is currently being viewed
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     const fetchPetAndStatus = async () => {
       try {
-        // 1. Fetch the Pet's data
         const docRef = doc(db, 'pets', id);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          setPet({ id: docSnap.id, ...docSnap.data() });
+          const petData = { id: docSnap.id, ...docSnap.data() };
+          setPet(petData);
+
+          const rescuerDoc = await getDoc(doc(db, 'users', petData.rescuerId));
+          if (rescuerDoc.exists()) {
+            setRescuerPhone(rescuerDoc.data().phone || rescuerDoc.data().phoneNumber || 'Not provided');
+          }
         } else {
           setError("Pet not found! They may have been removed.");
           setLoading(false);
-          return; // Stop running if there's no pet
+          return; 
         }
 
-        // 2. Check if the current user has an APPROVED application for this pet
         if (currentUser) {
           const statusQuery = query(
             collection(db, 'adoptionRequests'),
@@ -40,7 +46,6 @@ export default function PetDetails() {
           );
           const statusSnap = await getDocs(statusQuery);
           
-          // If the query finds a match, they are approved!
           if (!statusSnap.empty) {
             setIsApprovedAdopter(true);
           }
@@ -60,6 +65,18 @@ export default function PetDetails() {
   if (error) return <div className="text-center mt-20 text-red-500 text-xl font-semibold">{error}</div>;
   if (!pet) return null;
 
+  // NEW: Determine our image array. If 'imageUrls' doesn't exist (older posts), fall back to putting the single 'imageUrl' in an array.
+  const petImages = pet.imageUrls && pet.imageUrls.length > 0 ? pet.imageUrls : [pet.imageUrl];
+
+  // Carousel controls
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % petImages.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + petImages.length) % petImages.length);
+  };
+
   return (
     <div className="container mx-auto mt-10 mb-10 px-4 max-w-5xl">
       <Link to="/browse" className="text-secondary font-bold hover:underline mb-6 inline-block">
@@ -68,8 +85,41 @@ export default function PetDetails() {
       
       <div className="bg-white rounded-lg shadow-lg overflow-hidden border-t-4 border-primary flex flex-col md:flex-row">
         
-        <div className="md:w-1/2">
-          <img src={pet.imageUrl} alt={pet.name} className="w-full h-full object-cover min-h-[300px] md:min-h-[500px]" />
+        {/* UPDATED: Image Carousel Section */}
+        <div className="md:w-1/2 relative bg-gray-100 min-h-[300px] md:min-h-[500px] flex items-center justify-center overflow-hidden">
+          <img 
+            src={petImages[currentImageIndex]} 
+            alt={`${pet.name} - Photo ${currentImageIndex + 1}`} 
+            className="w-full h-full object-cover absolute inset-0 transition-opacity duration-300" 
+          />
+          
+          {/* Only render arrows and dots if there is more than 1 image */}
+          {petImages.length > 1 && (
+            <>
+              <button 
+                onClick={prevImage}
+                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md"
+              >
+                &#10094;
+              </button>
+              
+              <button 
+                onClick={nextImage}
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md"
+              >
+                &#10095;
+              </button>
+
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
+                {petImages.map((_, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`w-2.5 h-2.5 rounded-full transition-colors shadow-sm ${idx === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
         
         <div className="p-8 md:w-1/2 flex flex-col">
@@ -91,27 +141,39 @@ export default function PetDetails() {
           </p>
           
           <div className="bg-blue-50 p-4 rounded-md border border-blue-100 mb-6">
-            <h4 className="font-bold text-primary mb-2">Rescuer Information</h4>
-            <p className="text-sm text-gray-700 mb-1">
+            <h4 className="font-bold text-primary mb-3 border-b border-blue-200 pb-2">Rescuer Information</h4>
+            <p className="text-sm text-gray-700 mb-3">
                 <strong>Posted By:</strong>{' '}
                 <Link to={`/user/${pet.rescuerId}`} className="text-secondary font-bold hover:underline">
                   {pet.rescuerName || 'Anonymous'}
                 </Link>
-              </p>
-            <p className="text-sm text-gray-700 flex items-center space-x-2 mt-1 overflow-hidden">
-              <strong>Contact:</strong> 
-              {/* UPDATED LOGIC: Show email if they are the rescuer OR if they are an approved adopter! */}
-              {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) ? (
-                <span className="truncate">{pet.rescuerEmail}</span>
-              ) : (
-                <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
-                  Hidden until approved
-                </span>
-              )}
             </p>
+
+            <div className="space-y-2">
+              <p className="text-sm text-gray-700 flex items-center space-x-2 overflow-hidden">
+                <strong>Email:</strong> 
+                {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) ? (
+                  <span className="truncate">{pet.rescuerEmail}</span>
+                ) : (
+                  <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
+                    Hidden until approved
+                  </span>
+                )}
+              </p>
+              
+              <p className="text-sm text-gray-700 flex items-center space-x-2 overflow-hidden">
+                <strong>Phone:</strong> 
+                {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) ? (
+                  <span className="truncate">{rescuerPhone}</span>
+                ) : (
+                  <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
+                    Hidden until approved
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
           
-          {/* UPDATED LOGIC: Change the bottom button if they are approved */}
           {isApprovedAdopter ? (
              <div className="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mt-auto text-center font-bold">
                🎉 You are approved to adopt {pet.name}! Please contact the rescuer to finalize.

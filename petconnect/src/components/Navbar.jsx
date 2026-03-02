@@ -1,23 +1,22 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-// NEW FIREBASE IMPORTS
 import { doc, getDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false); // Mobile menu state
   const [dropdownOpen, setDropdownOpen] = useState(false); // Desktop dropdown state
-  const [userProfile, setUserProfile] = useState(null); // NEW: State for extended profile data
+  const [userProfile, setUserProfile] = useState(null); // State for extended profile data
   
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
-  const dropdownRef = useRef(null); // Helps us close the dropdown if the user clicks outside of it
+  const dropdownRef = useRef(null); 
 
-  // Fetch the user's extended profile data when the component mounts or the user changes
+  // Fetch the user's extended profile data (including their role!)
   useEffect(() => {
     if (!currentUser) {
-      setUserProfile(null); // Reset if no user is logged in
+      setUserProfile(null); 
       return;
     }
 
@@ -27,7 +26,6 @@ const Navbar = () => {
         if (userDoc.exists()) {
           setUserProfile(userDoc.data());
         } else {
-          // If no doc exists yet, we can set a basic fallback
           setUserProfile({ displayName: currentUser.displayName || currentUser.email, bio: '', profilePicUrl: '' });
         }
       } catch (error) {
@@ -59,9 +57,7 @@ const Navbar = () => {
     }
   };
 
-  // Get the first letter of their name or email for the Avatar initial icon
   const getInitial = () => {
-    // UPDATED: Check for custom profile name first
     if (userProfile?.displayName) return userProfile.displayName.charAt(0).toUpperCase();
     if (currentUser?.displayName) return currentUser.displayName.charAt(0).toUpperCase();
     if (currentUser?.email) return currentUser.email.charAt(0).toUpperCase();
@@ -88,7 +84,6 @@ const Navbar = () => {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center space-x-2 focus:outline-none hover:opacity-80 transition ml-4 border-l border-gray-500 pl-6"
               >
-                {/* NEW: Conditional rendering of image or initial */}
                 {userProfile?.profilePicUrl ? (
                    <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
                 ) : (
@@ -97,7 +92,6 @@ const Navbar = () => {
                    </div>
                 )}
                 <span className="text-sm font-medium">{userProfile?.displayName || currentUser.displayName || currentUser.email}</span>
-                {/* Little downward arrow icon */}
                 <svg className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -125,6 +119,17 @@ const Navbar = () => {
                   >
                     Edit Public Profile
                   </Link>
+
+                  {/* NEW: Admin Panel Link */}
+                  {userProfile?.role === 'admin' && (
+                    <Link 
+                      to="/admin" 
+                      onClick={() => setDropdownOpen(false)}
+                      className="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-bold transition border-t border-gray-100 mt-1 pt-2"
+                    >
+                      Admin Panel
+                    </Link>
+                  )}
                   
                   <div className="border-t border-gray-100 mt-1 pt-1">
                     <button 
@@ -164,7 +169,6 @@ const Navbar = () => {
           {currentUser ? (
              <div className="border-t border-gray-600 pt-2 mt-2">
                <div className="px-4 py-2 flex items-center space-x-3 mb-2">
-                 {/* NEW: Conditional rendering for mobile avatar */}
                  {userProfile?.profilePicUrl ? (
                     <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
                  ) : (
@@ -177,6 +181,13 @@ const Navbar = () => {
                
                <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">My Dashboard</Link>
                <Link to="/edit-profile" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">Edit Profile</Link>
+
+               {/* NEW: Admin Panel Link (Mobile) */}
+               {userProfile?.role === 'admin' && (
+                  <Link to="/admin" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-red-400 font-bold border-t border-gray-600 mt-2 pt-2">
+                    Admin Panel
+                  </Link>
+               )}
                
                <button 
                  onClick={() => { handleLogout(); setIsOpen(false); }} 

@@ -9,6 +9,7 @@ export default function EditProfile() {
   const navigate = useNavigate();
   
   const [displayName, setDisplayName] = useState('');
+  const [phone, setPhone] = useState(''); // NEW: Phone state
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState(null);
   const [existingPicUrl, setExistingPicUrl] = useState('');
@@ -30,6 +31,8 @@ export default function EditProfile() {
         if (userDoc.exists()) {
           const data = userDoc.data();
           setDisplayName(data.displayName || currentUser.displayName || '');
+          // NEW: Grab the phone number (checking both potential variable names just in case)
+          setPhone(data.phone || data.phoneNumber || ''); 
           setBio(data.bio || '');
           setExistingPicUrl(data.profilePicUrl || '');
         } else {
@@ -58,7 +61,6 @@ export default function EditProfile() {
         const formData = new FormData();
         formData.append('file', profilePic);
         
-        // IMPORTANT: Replace these with your actual Cloudinary details!
         formData.append('upload_preset', 'petconnect_uploads'); 
         const cloudinaryResponse = await fetch(
           'https://api.cloudinary.com/v1_1/drvxsajim/image/upload',
@@ -75,6 +77,7 @@ export default function EditProfile() {
       await setDoc(doc(db, 'users', currentUser.uid), {
         displayName: displayName || 'Anonymous',
         email: currentUser.email,
+        phone: phone, // NEW: Save the updated phone number!
         bio: bio,
         profilePicUrl: finalPicUrl,
         updatedAt: new Date()
@@ -128,16 +131,31 @@ export default function EditProfile() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">Display Name</label>
-            <input 
-              type="text" 
-              value={displayName} 
-              onChange={(e) => setDisplayName(e.target.value)} 
-              required 
-              placeholder="e.g. John Doe Rescue"
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
-            />
+          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+            <div className="w-full sm:w-1/2">
+              <label className="block text-gray-700 font-semibold mb-2">Display Name</label>
+              <input 
+                type="text" 
+                value={displayName} 
+                onChange={(e) => setDisplayName(e.target.value)} 
+                required 
+                placeholder="e.g. John Doe Rescue"
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
+              />
+            </div>
+
+            {/* NEW: Phone Number Input */}
+            <div className="w-full sm:w-1/2">
+              <label className="block text-gray-700 font-semibold mb-2">Phone Number</label>
+              <input 
+                type="tel" 
+                value={phone} 
+                onChange={(e) => setPhone(e.target.value)} 
+                required 
+                placeholder="e.g. 09123456789"
+                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
+              />
+            </div>
           </div>
 
           <div>

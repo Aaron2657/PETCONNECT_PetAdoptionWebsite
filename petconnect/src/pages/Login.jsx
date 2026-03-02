@@ -1,12 +1,17 @@
 import { useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+// NEW FIREBASE IMPORTS
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { getAuth } from 'firebase/auth';
 
 export default function Login() {
   const emailRef = useRef();
   const passwordRef = useRef();
   
-  const { login } = useAuth();
+  // UPDATED: Destructure 'logout' so we can kick banned users out!
+  const { login, logout } = useAuth(); 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -17,14 +22,37 @@ export default function Login() {
     try {
       setError('');
       setLoading(true);
-      // Call the login function from AuthContext
+      
+      // 1. Authenticate the user with Firebase
       await login(emailRef.current.value, passwordRef.current.value);
-      // If successful, redirect to the home page
+      
+      // 2. Grab their current User ID securely from Firebase Auth
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (user) {
+        // 3. Fetch their user profile from your database
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
+        // 4. Check if the Admin has flagged them as banned
+        if (userDoc.exists() && userDoc.data().isBanned) {
+          
+          // Log them out instantly!
+          await logout(); 
+          
+          // Display the exact requested error message
+          setError('You have been reported by a user and has been banned off the platform and cannot login.');
+          setLoading(false);
+          return; // Stop running the code so they don't get redirected to the Home page!
+        }
+      }
+
+      // 5. If they are NOT banned, send them to the home page normally
       navigate('/');
     } catch (err) {
       setError('Failed to log in. Please check your credentials.');
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (

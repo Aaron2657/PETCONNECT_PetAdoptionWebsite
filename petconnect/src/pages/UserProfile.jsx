@@ -1,35 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; // Added doc, getDoc
+import { doc, getDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 
 export default function UserProfile() {
   const { id } = useParams(); 
   
-  // New extended user state
-  const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '' });
+  // Notice we ensure isBanned defaults to false in state
+  const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '', isBanned: false });
   const [pets, setPets] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserAndPets = async () => {
       try {
-        // 1. Fetch the user's custom profile from the 'users' collection
         const userDoc = await getDoc(doc(db, 'users', id));
         if (userDoc.exists()) {
           setUserProfile(userDoc.data());
         }
 
-        // 2. Fetch their available pets
         const petsQuery = query(collection(db, 'pets'), where('rescuerId', '==', id));
         const petsSnap = await getDocs(petsQuery);
         
         const allPets = petsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const availablePets = allPets.filter(pet => !pet.status || pet.status === 'Available');
         
-        // If they don't have a custom profile yet, try to grab the name from their first pet as a fallback
         if (!userDoc.exists() && allPets.length > 0) {
-           setUserProfile({ displayName: allPets[0].rescuerName || 'Anonymous Rescuer', bio: '', profilePicUrl: '' });
+           setUserProfile({ displayName: allPets[0].rescuerName || 'Anonymous Rescuer', bio: '', profilePicUrl: '', isBanned: false });
         }
 
         setPets(availablePets);
@@ -43,30 +40,68 @@ export default function UserProfile() {
     fetchUserAndPets();
   }, [id]);
 
+  const handleReportUser = async () => {
+    const reason = window.prompt("Why are you reporting this user? (e.g., Fake account, inappropriate behavior)");
+    if (!reason) return; 
+
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reportedUserId: id,
+        reportedUserName: userProfile.displayName,
+        reporterId: 'Anonymous/System', 
+        reason: reason,
+        status: 'Pending',
+        createdAt: new Date()
+      });
+      alert("Report submitted successfully. Our admins will review it.");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to submit report.");
+    }
+  };
+
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading profile...</div>;
 
   return (
     <div className="container mx-auto mt-10 mb-10 px-4">
       
       {/* Profile Header */}
-      <div className="bg-white rounded-lg shadow-md p-8 mb-8 border-t-4 border-secondary text-center max-w-3xl mx-auto flex flex-col items-center">
+      <div className={`bg-white rounded-lg shadow-md p-8 mb-8 border-t-4 text-center max-w-3xl mx-auto flex flex-col items-center ${userProfile.isBanned ? 'border-red-600' : 'border-secondary'}`}>
         
-        {/* Render custom picture OR fallback to initials */}
+        {/* NEW: Massive Banned Warning Banner */}
+        {userProfile.isBanned && (
+          <div className="w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md font-bold mb-6 flex items-center justify-center space-x-2">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <span>THIS ACCOUNT HAS BEEN BANNED FOR VIOLATING PLATFORM POLICIES.</span>
+          </div>
+        )}
+
         {userProfile.profilePicUrl ? (
-           <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-primary shadow-sm" />
+           <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${userProfile.isBanned ? 'border-red-600 opacity-50 grayscale' : 'border-primary'}`} />
         ) : (
-           <div className="w-24 h-24 bg-primary text-white rounded-full flex items-center justify-center text-4xl font-bold mb-4 shadow-inner uppercase border-4 border-transparent">
+           <div className={`w-24 h-24 text-white rounded-full flex items-center justify-center text-4xl font-bold mb-4 shadow-inner uppercase border-4 border-transparent ${userProfile.isBanned ? 'bg-red-800 opacity-50' : 'bg-primary'}`}>
              {userProfile.displayName.charAt(0)}
            </div>
         )}
         
-        <h2 className="text-3xl font-bold text-primary">{userProfile.displayName}</h2>
+        <h2 className={`text-3xl font-bold ${userProfile.isBanned ? 'text-red-700 line-through' : 'text-primary'}`}>
+          {userProfile.displayName}
+        </h2>
         
-        {/* Show their bio if they wrote one! */}
         {userProfile.bio ? (
            <p className="text-gray-700 mt-4 max-w-lg italic">"{userProfile.bio}"</p>
         ) : (
            <p className="text-gray-500 mt-2 font-medium">Dedicated PetConnect Rescuer</p>
+        )}
+
+        {/* Hide the report button if they are already banned! */}
+        {!userProfile.isBanned && (
+          <button 
+            onClick={handleReportUser}
+            className="mt-4 text-xs text-red-500 font-bold hover:underline"
+          >
+            Flag / Report User
+          </button>
         )}
       </div>
 
@@ -74,7 +109,14 @@ export default function UserProfile() {
         Pets Up For Adoption
       </h3>
 
-      {pets.length === 0 ? (
+      {/* NEW: If the user is banned, completely hide their pets from this screen as well */}
+      {userProfile.isBanned ? (
+         <div className="bg-red-50 p-8 rounded-lg shadow-sm max-w-7xl mx-auto text-center border border-red-200">
+           <p className="text-red-600 font-bold text-lg">
+             Pets posted by banned accounts are no longer visible.
+           </p>
+         </div>
+      ) : pets.length === 0 ? (
         <p className="text-center text-gray-500 text-lg bg-white p-8 rounded-lg shadow-sm max-w-7xl mx-auto">
           This rescuer doesn't have any pets currently available for adoption. Check back later!
         </p>
