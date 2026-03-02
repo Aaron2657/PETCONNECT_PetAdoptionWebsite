@@ -9,6 +9,9 @@ import BrowsePets from './pages/BrowsePets';
 import PetDetails from './pages/PetDetails';
 import AdoptionRequest from './pages/AdoptionRequest';
 import UserDashboard from './pages/UserDashboard';
+import UserProfile from './pages/UserProfile';
+import EditProfile from './pages/EditProfile';
+import EditPet from './pages/EditPet';
 
 function App() {
   return (
@@ -18,6 +21,7 @@ function App() {
           <Navbar />
           <main className="flex-grow p-4 md:p-8">
             <Routes>
+              <Route path="/user/:id" element={<UserProfile />} />
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
@@ -26,6 +30,8 @@ function App() {
               <Route path="/pet/:id" element={<PetDetails />} />
               <Route path="/adopt/:id" element={<AdoptionRequest />} />
               <Route path="/dashboard" element={<UserDashboard />} />
+              <Route path="/edit-profile" element={<EditProfile />} />
+              <Route path="/edit-pet/:id" element={<EditPet />} />
             </Routes>
           </main>
         </div>

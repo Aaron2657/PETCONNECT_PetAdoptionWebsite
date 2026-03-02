@@ -1,23 +1,75 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+// NEW FIREBASE IMPORTS
+import { doc, getDoc } from 'firebase/firestore'; 
+import { db } from '../config/firebase';
 
 const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false); // Mobile menu state
+  const [dropdownOpen, setDropdownOpen] = useState(false); // Desktop dropdown state
+  const [userProfile, setUserProfile] = useState(null); // NEW: State for extended profile data
+  
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const dropdownRef = useRef(null); // Helps us close the dropdown if the user clicks outside of it
+
+  // Fetch the user's extended profile data when the component mounts or the user changes
+  useEffect(() => {
+    if (!currentUser) {
+      setUserProfile(null); // Reset if no user is logged in
+      return;
+    }
+
+    const fetchUserProfile = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+        } else {
+          // If no doc exists yet, we can set a basic fallback
+          setUserProfile({ displayName: currentUser.displayName || currentUser.email, bio: '', profilePicUrl: '' });
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+      }
+    };
+
+    fetchUserProfile();
+  }, [currentUser]);
+
+  // Close the dropdown if the user clicks anywhere else on the screen
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     try {
       await logout();
+      setDropdownOpen(false);
       navigate('/login');
     } catch (error) {
       console.error("Failed to log out", error);
     }
   };
 
+  // Get the first letter of their name or email for the Avatar initial icon
+  const getInitial = () => {
+    // UPDATED: Check for custom profile name first
+    if (userProfile?.displayName) return userProfile.displayName.charAt(0).toUpperCase();
+    if (currentUser?.displayName) return currentUser.displayName.charAt(0).toUpperCase();
+    if (currentUser?.email) return currentUser.email.charAt(0).toUpperCase();
+    return '?';
+  };
+
   return (
-    <nav className="bg-primary text-white p-4 shadow-md">
+    <nav className="bg-primary text-white p-4 shadow-md relative z-50">
       <div className="container mx-auto flex justify-between items-center">
         {/* Logo */}
         <Link to="/" className="text-2xl font-bold tracking-wide text-secondary">
@@ -26,28 +78,67 @@ const Navbar = () => {
 
         {/* Desktop Menu */}
         <div className="hidden md:flex space-x-6 items-center">
-          <Link to="/" className="hover:text-tertiary transition">Home</Link>
-          <Link to="/browse" className="hover:text-tertiary transition">Browse Pets</Link>
+          <Link to="/" className="hover:text-tertiary transition font-medium">Home</Link>
+          <Link to="/browse" className="hover:text-tertiary transition font-medium">Browse Pets</Link>
           
           {currentUser ? (
-            <div className="flex items-center space-x-6">
-              {/* NEW DASHBOARD LINK */}
-              <Link to="/dashboard" className="text-tertiary font-bold hover:text-white transition">Dashboard</Link>
-              
-              <div className="flex items-center space-x-4 border-l border-gray-400 pl-6">
-                <span className="text-sm text-gray-300">
-                  {currentUser.displayName || currentUser.email}
-                </span>
-                <button 
-                  onClick={handleLogout} 
-                  className="bg-red-500 text-white px-4 py-2 rounded-md font-semibold hover:bg-red-600 transition text-sm"
-                >
-                  Log Out
-                </button>
-              </div>
+            <div className="relative" ref={dropdownRef}>
+              {/* Dropdown Trigger Button */}
+              <button 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center space-x-2 focus:outline-none hover:opacity-80 transition ml-4 border-l border-gray-500 pl-6"
+              >
+                {/* NEW: Conditional rendering of image or initial */}
+                {userProfile?.profilePicUrl ? (
+                   <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
+                ) : (
+                   <div className="w-10 h-10 bg-tertiary text-primary rounded-full flex items-center justify-center font-bold shadow-sm uppercase">
+                      {getInitial()}
+                   </div>
+                )}
+                <span className="text-sm font-medium">{userProfile?.displayName || currentUser.displayName || currentUser.email}</span>
+                {/* Little downward arrow icon */}
+                <svg className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+
+              {/* Styled Dropdown Menu */}
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-3 w-56 bg-white rounded-lg shadow-xl py-2 border border-gray-100 overflow-hidden transform transition-all">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                    <p className="text-xs text-gray-500">Signed in as</p>
+                    <p className="text-sm font-bold text-primary truncate">{currentUser.email}</p>
+                  </div>
+                  
+                  <Link 
+                    to="/dashboard" 
+                    onClick={() => setDropdownOpen(false)}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-tertiary hover:text-primary transition"
+                  >
+                    My Dashboard
+                  </Link>
+                  <Link 
+                    to="/edit-profile" 
+                    onClick={() => setDropdownOpen(false)}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-tertiary hover:text-primary transition"
+                  >
+                    Edit Public Profile
+                  </Link>
+                  
+                  <div className="border-t border-gray-100 mt-1 pt-1">
+                    <button 
+                      onClick={handleLogout} 
+                      className="block w-full text-left px-4 py-2 text-sm text-red-600 font-bold hover:bg-red-50 transition"
+                    >
+                      Log Out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <Link to="/login" className="bg-secondary text-primary px-4 py-2 rounded-md font-semibold hover:bg-opacity-90 transition whitespace-nowrap">
+            <Link to="/login" className="bg-secondary text-primary px-5 py-2 rounded-md font-bold hover:bg-opacity-90 transition shadow-sm ml-4">
               Login / Sign Up
             </Link>
           )}
@@ -66,27 +157,36 @@ const Navbar = () => {
 
       {/* Mobile Menu Dropdown */}
       {isOpen && (
-        <div className="md:hidden mt-4 space-y-2 pb-2">
-          <Link to="/" className="block hover:bg-gray-700 px-2 py-1 rounded">Home</Link>
-          <Link to="/browse" className="block hover:bg-gray-700 px-2 py-1 rounded">Browse Pets</Link>
+        <div className="md:hidden mt-4 space-y-2 pb-4 bg-primary shadow-inner rounded-b-lg">
+          <Link to="/" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded font-medium">Home</Link>
+          <Link to="/browse" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded font-medium">Browse Pets</Link>
           
           {currentUser ? (
-             <>
-               {/* NEW MOBILE DASHBOARD LINK */}
-               <Link to="/dashboard" className="block text-tertiary font-bold hover:bg-gray-700 px-2 py-1 rounded">Dashboard</Link>
+             <div className="border-t border-gray-600 pt-2 mt-2">
+               <div className="px-4 py-2 flex items-center space-x-3 mb-2">
+                 {/* NEW: Conditional rendering for mobile avatar */}
+                 {userProfile?.profilePicUrl ? (
+                    <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
+                 ) : (
+                    <div className="w-10 h-10 bg-tertiary text-primary rounded-full flex items-center justify-center font-bold shadow-sm uppercase">
+                       {getInitial()}
+                    </div>
+                 )}
+                 <span className="text-sm font-medium text-gray-200 truncate">{currentUser.email}</span>
+               </div>
                
-               <span className="block text-gray-300 px-2 py-1 text-sm border-t border-gray-600 pt-2 mt-2">
-                 Logged in as: {currentUser.displayName || currentUser.email}
-               </span>
+               <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">My Dashboard</Link>
+               <Link to="/edit-profile" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">Edit Profile</Link>
+               
                <button 
-                 onClick={handleLogout} 
-                 className="block w-full text-left text-red-400 font-semibold hover:bg-gray-700 px-2 py-1 rounded"
+                 onClick={() => { handleLogout(); setIsOpen(false); }} 
+                 className="block w-full text-left text-red-400 font-bold hover:bg-gray-700 px-4 py-2 rounded mt-2"
                >
                  Log Out
                </button>
-             </>
+             </div>
           ) : (
-            <Link to="/login" className="block text-secondary font-semibold hover:bg-gray-700 px-2 py-1 rounded">
+            <Link to="/login" onClick={() => setIsOpen(false)} className="block text-secondary font-bold hover:bg-gray-700 px-4 py-2 rounded mt-2">
               Login / Sign Up
             </Link>
           )}

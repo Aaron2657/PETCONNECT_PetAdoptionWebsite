@@ -92,7 +92,12 @@ export default function PetDetails() {
           
           <div className="bg-blue-50 p-4 rounded-md border border-blue-100 mb-6">
             <h4 className="font-bold text-primary mb-2">Rescuer Information</h4>
-            <p className="text-sm text-gray-700 mb-1"><strong>Posted By:</strong> {pet.rescuerName || 'Anonymous'}</p>
+            <p className="text-sm text-gray-700 mb-1">
+                <strong>Posted By:</strong>{' '}
+                <Link to={`/user/${pet.rescuerId}`} className="text-secondary font-bold hover:underline">
+                  {pet.rescuerName || 'Anonymous'}
+                </Link>
+              </p>
             <p className="text-sm text-gray-700 flex items-center space-x-2 mt-1 overflow-hidden">
               <strong>Contact:</strong> 
               {/* UPDATED LOGIC: Show email if they are the rescuer OR if they are an approved adopter! */}

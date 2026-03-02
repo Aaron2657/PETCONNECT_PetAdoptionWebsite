@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'; // <-- Added deleteDoc
 import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 
@@ -39,7 +39,6 @@ export default function UserDashboard() {
     fetchDashboardData();
   }, [currentUser]);
 
-  // Handle Application Status (Accept/Reject)
   const handleUpdateStatus = async (requestId, newStatus) => {
     try {
       const requestRef = doc(db, 'adoptionRequests', requestId);
@@ -53,13 +52,11 @@ export default function UserDashboard() {
     }
   };
 
-  // NEW FUNCTION: Handle Pet Status (Available/Pending/Adopted)
   const handleUpdatePetStatus = async (petId, newStatus) => {
     try {
       const petRef = doc(db, 'pets', petId);
       await updateDoc(petRef, { status: newStatus });
       
-      // Update the screen instantly
       setMyPets(prevPets => 
         prevPets.map(pet => pet.id === petId ? { ...pet, status: newStatus } : pet)
       );
@@ -69,12 +66,42 @@ export default function UserDashboard() {
     }
   };
 
+  // NEW FUNCTION: Handle Deleting a Pet
+  const handleDeletePet = async (petId) => {
+    // 1. Ask the user to confirm so they don't click it by accident!
+    const confirmDelete = window.confirm("Are you sure you want to delete this pet? This action cannot be undone.");
+    
+    if (!confirmDelete) return; // If they click 'Cancel', stop running the code.
+
+    try {
+      // 2. Tell Firebase to permanently delete the document
+      await deleteDoc(doc(db, 'pets', petId));
+      
+      // 3. Update the screen instantly to remove the pet card
+      setMyPets(prevPets => prevPets.filter(pet => pet.id !== petId));
+      
+    } catch (error) {
+      console.error("Error deleting pet:", error);
+      alert("Failed to delete the pet. Please try again.");
+    }
+  };
+
   if (!currentUser) return <div className="text-center mt-20 text-xl font-bold text-primary">Please log in to view your dashboard.</div>;
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading your command center...</div>;
 
   return (
     <div className="container mx-auto mt-10 mb-10 px-4 max-w-5xl">
-      <h2 className="text-3xl font-bold text-primary mb-8 border-b-2 border-secondary pb-4">My Dashboard</h2>
+      
+      {/* Dashboard Header with Edit Profile Button */}
+      <div className="flex justify-between items-center mb-8 border-b-2 border-secondary pb-4">
+        <h2 className="text-3xl font-bold text-primary">My Dashboard</h2>
+        <Link 
+          to="/edit-profile" 
+          className="bg-primary text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-opacity-90 transition shadow-sm"
+        >
+          Edit Public Profile
+        </Link>
+      </div>
 
       {/* Section 1: My Posted Pets */}
       <div className="mb-12">
@@ -89,7 +116,6 @@ export default function UserDashboard() {
                 <div className="flex-grow">
                   <h4 className="font-bold text-lg text-primary">{pet.name}</h4>
                   
-                  {/* NEW LOGIC: Dynamic Status Color */}
                   <p className="text-sm text-gray-600 mb-2">Status: 
                     <span className={`ml-1 font-bold ${
                       pet.status === 'Adopted' ? 'text-secondary' : 
@@ -99,7 +125,6 @@ export default function UserDashboard() {
                     </span>
                   </p>
                   
-                  {/* NEW DROPDOWN: Change Pet Status */}
                   <div className="flex flex-col space-y-2 mt-2">
                     <select 
                       value={pet.status || 'Available'}
@@ -111,7 +136,19 @@ export default function UserDashboard() {
                       <option value="Adopted">Adopted</option>
                     </select>
                     
-                    <Link to={`/pet/${pet.id}`} className="text-tertiary text-sm font-bold hover:underline">View Public Profile</Link>
+                    {/* LINKS: View, Edit, and Delete */}
+                    <div className="flex items-center space-x-3 pt-2">
+                      <Link to={`/pet/${pet.id}`} className="text-tertiary text-sm font-bold hover:underline leading-none">View</Link>
+                      <span className="text-gray-300 leading-none">|</span>
+                      <Link to={`/edit-pet/${pet.id}`} className="text-blue-500 text-sm font-bold hover:underline leading-none">Edit</Link>
+                      <span className="text-gray-300 leading-none">|</span>
+                      <button 
+                        onClick={() => handleDeletePet(pet.id)} 
+                        className="text-red-500 text-sm font-bold hover:underline leading-none"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
