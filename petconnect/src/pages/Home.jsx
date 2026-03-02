@@ -20,7 +20,7 @@ export default function Home() {
               to="/browse" 
               className="bg-primary text-white px-8 py-4 rounded-lg shadow-lg hover:bg-opacity-90 transition font-bold text-lg text-center"
             >
-              Find a Pet
+              Start Adopting Today
             </Link>
             <Link 
               to="/post-pet" 

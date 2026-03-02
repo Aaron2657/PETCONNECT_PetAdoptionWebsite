@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; 
+import { useParams, Link, useNavigate } from 'react-router-dom'; // NEW: Added useNavigate
+// NEW: Added deleteDoc to the imports
+import { doc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
 export default function PetDetails() {
   const { id } = useParams();
   const { currentUser } = useAuth(); 
+  const navigate = useNavigate(); // NEW: Initialize navigate
   
   const [pet, setPet] = useState(null);
   const [rescuerPhone, setRescuerPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isApprovedAdopter, setIsApprovedAdopter] = useState(false);
-
-  // NEW: State to track which image in the carousel is currently being viewed
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
@@ -61,14 +61,27 @@ export default function PetDetails() {
     fetchPetAndStatus();
   }, [id, currentUser]);
 
+  // NEW: Handle Deleting the Pet
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm("Are you sure you want to permanently delete this pet post?");
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, 'pets', id));
+      alert("Pet post deleted successfully.");
+      navigate('/browse'); // Send them back to the browse page after deleting
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete the pet post.");
+    }
+  };
+
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading pet details...</div>;
   if (error) return <div className="text-center mt-20 text-red-500 text-xl font-semibold">{error}</div>;
   if (!pet) return null;
 
-  // NEW: Determine our image array. If 'imageUrls' doesn't exist (older posts), fall back to putting the single 'imageUrl' in an array.
   const petImages = pet.imageUrls && pet.imageUrls.length > 0 ? pet.imageUrls : [pet.imageUrl];
 
-  // Carousel controls
   const nextImage = () => {
     setCurrentImageIndex((prev) => (prev + 1) % petImages.length);
   };
@@ -85,7 +98,6 @@ export default function PetDetails() {
       
       <div className="bg-white rounded-lg shadow-lg overflow-hidden border-t-4 border-primary flex flex-col md:flex-row">
         
-        {/* UPDATED: Image Carousel Section */}
         <div className="md:w-1/2 relative bg-gray-100 min-h-[300px] md:min-h-[500px] flex items-center justify-center overflow-hidden">
           <img 
             src={petImages[currentImageIndex]} 
@@ -93,7 +105,6 @@ export default function PetDetails() {
             className="w-full h-full object-cover absolute inset-0 transition-opacity duration-300" 
           />
           
-          {/* Only render arrows and dots if there is more than 1 image */}
           {petImages.length > 1 && (
             <>
               <button 
@@ -174,7 +185,23 @@ export default function PetDetails() {
             </div>
           </div>
           
-          {isApprovedAdopter ? (
+          {/* UPDATED: Button Logic - Rescuer sees Edit/Delete, Approved Adopter sees message, Others see Adopt */}
+          {currentUser && currentUser.uid === pet.rescuerId ? (
+            <div className="flex space-x-4 mt-auto">
+              <Link 
+                to={`/edit-pet/${pet.id}`} 
+                className="w-1/2 text-center bg-gray-200 text-gray-800 font-bold py-3 rounded hover:bg-gray-300 transition shadow-sm"
+              >
+                Edit Post
+              </Link>
+              <button 
+                onClick={handleDelete}
+                className="w-1/2 bg-red-600 text-white font-bold py-3 rounded hover:bg-red-700 transition shadow-sm"
+              >
+                Delete Post
+              </button>
+            </div>
+          ) : isApprovedAdopter ? (
              <div className="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mt-auto text-center font-bold">
                🎉 You are approved to adopt {pet.name}! Please contact the rescuer to finalize.
              </div>

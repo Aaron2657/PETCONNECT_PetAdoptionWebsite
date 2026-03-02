@@ -1,19 +1,33 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore'; 
+// UPDATED: Added updateDoc for the ban function
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
+// NEW: Import useAuth to check who is viewing the page
+import { useAuth } from '../context/AuthContext';
 
 export default function UserProfile() {
   const { id } = useParams(); 
+  const { currentUser } = useAuth(); // NEW: Grab the current logged-in user
   
-  // Notice we ensure isBanned defaults to false in state
   const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '', isBanned: false });
   const [pets, setPets] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  const [isAdmin, setIsAdmin] = useState(false); // NEW: State to track if the viewer is an admin
 
   useEffect(() => {
     const fetchUserAndPets = async () => {
       try {
+        // NEW: Check if the person viewing this profile is an admin!
+        if (currentUser) {
+          const viewerDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (viewerDoc.exists() && viewerDoc.data().role === 'admin') {
+            setIsAdmin(true);
+          }
+        }
+
+        // Fetch the profile being viewed
         const userDoc = await getDoc(doc(db, 'users', id));
         if (userDoc.exists()) {
           setUserProfile(userDoc.data());
@@ -38,7 +52,7 @@ export default function UserProfile() {
     };
 
     fetchUserAndPets();
-  }, [id]);
+  }, [id, currentUser]);
 
   const handleReportUser = async () => {
     const reason = window.prompt("Why are you reporting this user? (e.g., Fake account, inappropriate behavior)");
@@ -48,7 +62,7 @@ export default function UserProfile() {
       await addDoc(collection(db, 'reports'), {
         reportedUserId: id,
         reportedUserName: userProfile.displayName,
-        reporterId: 'Anonymous/System', 
+        reporterId: currentUser ? currentUser.uid : 'Anonymous', 
         reason: reason,
         status: 'Pending',
         createdAt: new Date()
@@ -60,6 +74,24 @@ export default function UserProfile() {
     }
   };
 
+  // NEW: Instant Ban Function for Admins
+  const handleBanUser = async () => {
+    const confirmBan = window.confirm(`Are you sure you want to instantly ban ${userProfile.displayName}?`);
+    if (!confirmBan) return;
+
+    try {
+      // 1. Update the database
+      await updateDoc(doc(db, 'users', id), { isBanned: true });
+      
+      // 2. Instantly update the screen so the red warning banner appears!
+      setUserProfile(prev => ({ ...prev, isBanned: true }));
+      alert("User has been banned successfully.");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to ban user.");
+    }
+  };
+
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading profile...</div>;
 
   return (
@@ -68,7 +100,6 @@ export default function UserProfile() {
       {/* Profile Header */}
       <div className={`bg-white rounded-lg shadow-md p-8 mb-8 border-t-4 text-center max-w-3xl mx-auto flex flex-col items-center ${userProfile.isBanned ? 'border-red-600' : 'border-secondary'}`}>
         
-        {/* NEW: Massive Banned Warning Banner */}
         {userProfile.isBanned && (
           <div className="w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md font-bold mb-6 flex items-center justify-center space-x-2">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -94,14 +125,23 @@ export default function UserProfile() {
            <p className="text-gray-500 mt-2 font-medium">Dedicated PetConnect Rescuer</p>
         )}
 
-        {/* Hide the report button if they are already banned! */}
+        {/* UPDATED: Dynamic Button Logic */}
         {!userProfile.isBanned && (
-          <button 
-            onClick={handleReportUser}
-            className="mt-4 text-xs text-red-500 font-bold hover:underline"
-          >
-            Flag / Report User
-          </button>
+          isAdmin ? (
+            <button 
+              onClick={handleBanUser}
+              className="mt-4 bg-red-600 text-white font-bold py-2 px-6 rounded-md shadow-sm hover:bg-red-700 transition"
+            >
+              Ban User
+            </button>
+          ) : (
+            <button 
+              onClick={handleReportUser}
+              className="mt-4 text-xs text-red-500 font-bold hover:underline"
+            >
+              Flag / Report User
+            </button>
+          )
         )}
       </div>
 
@@ -109,7 +149,6 @@ export default function UserProfile() {
         Pets Up For Adoption
       </h3>
 
-      {/* NEW: If the user is banned, completely hide their pets from this screen as well */}
       {userProfile.isBanned ? (
          <div className="bg-red-50 p-8 rounded-lg shadow-sm max-w-7xl mx-auto text-center border border-red-200">
            <p className="text-red-600 font-bold text-lg">

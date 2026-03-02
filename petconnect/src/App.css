@@ -1,0 +1,45 @@
+/* =========================================
+   PetConnect Global App Styles
+========================================= */
+
+/* 1. Smooth Scrolling */
+/* When users click anchor links, the page will glide instead of snapping */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 2. Custom Premium Scrollbar */
+/* Replaces the ugly default browser scrollbar with a sleek, modern one */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f8fafc; /* Very light gray */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* A nice, subtle slate color */
+  border-radius: 10px;
+  border: 2px solid #f8fafc; /* Creates a nice padding effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* Darkens slightly when hovered */
+}
+
+/* 3. Prevent Image Dragging */
+/* Stops users from accidentally "ghost dragging" images across the screen, making it feel more like a native app */
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+}
+
+/* 4. Improve Text Highlight Color */
+/* Changes the highlight color when a user drags their mouse over text to match your theme (you can change the hex code to match your actual 'secondary' or 'tertiary' color!) */
+::selection {
+  background-color: #fde68a; /* A soft yellow/gold */
+  color: #1e293b;
+}

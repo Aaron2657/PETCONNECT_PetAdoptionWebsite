@@ -20,7 +20,7 @@ export default function AdminDashboard() {
       }
 
       try {
-        // 1. Verify this user is actually an admin!
+        // 1. Verify this user if it is an admin
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists() && userDoc.data().role === 'admin') {
           setIsAdmin(true);
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
   };
 
   if (loading) return <div className="text-center mt-20 text-xl font-bold text-primary">Loading Admin Panel...</div>;
-  if (!isAdmin) return null; // Failsafe
+  if (!isAdmin) return null; 
 
   return (
     <div className="container mx-auto mt-10 mb-10 px-4 max-w-6xl">

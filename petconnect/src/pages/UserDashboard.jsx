@@ -87,7 +87,7 @@ export default function UserDashboard() {
   };
 
   if (!currentUser) return <div className="text-center mt-20 text-xl font-bold text-primary">Please log in to view your dashboard.</div>;
-  if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading your command center...</div>;
+  if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading your dashboard...</div>;
 
   return (
     <div className="container mx-auto mt-10 mb-10 px-4 max-w-5xl">

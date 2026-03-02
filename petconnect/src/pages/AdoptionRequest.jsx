@@ -61,7 +61,7 @@ export default function AdoptionRequest() {
       setError('');
       setSubmitting(true);
 
-      // Save the application to a new 'adoptionRequests' collection
+      // Save the application to the 'adoptionRequests' collection in Firestore
       await addDoc(collection(db, 'adoptionRequests'), {
         petId: pet.id,
         petName: pet.name,
