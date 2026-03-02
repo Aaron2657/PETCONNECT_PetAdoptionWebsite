@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useAuth } from '../context/AuthContext'; // NEW: Import useAuth
 
 export default function BrowsePets() {
+  const { currentUser } = useAuth(); // NEW: Grab the currently logged-in user
+  
   const [pets, setPets] = useState([]);
   const [users, setUsers] = useState([]); 
   const [loading, setLoading] = useState(true);
@@ -15,21 +18,17 @@ export default function BrowsePets() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Fetch Users FIRST so we know who is banned
         const usersQuery = query(collection(db, 'users'));
         const usersSnap = await getDocs(usersQuery);
         
         const usersList = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setUsers(usersList);
 
-        // NEW: Create an array of IDs for users who are banned
         const bannedUserIds = usersList.filter(user => user.isBanned).map(user => user.id);
 
-        // 2. Fetch Pets
         const petsQuery = query(collection(db, 'pets'), orderBy('createdAt', 'desc'));
         const petsSnap = await getDocs(petsQuery);
         
-        // UPDATED: Filter out Adopted pets AND pets belonging to banned users!
         const petsList = petsSnap.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(pet => pet.status !== 'Adopted' && !bannedUserIds.includes(pet.rescuerId)); 
@@ -46,21 +45,35 @@ export default function BrowsePets() {
     fetchData();
   }, []);
 
+  const getRescuerName = (user) => {
+    if (user.displayName) return user.displayName;
+    if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
+    if (user.firstName) return user.firstName;
+    return 'Anonymous Rescuer';
+  };
+
   if (loading) {
-    return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading Fur Friends...</div>;
+    return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading directory...</div>;
   }
 
-  // Filter Pets Logic
   const filteredPets = pets.filter(pet => {
     const matchesSpecies = filterSpecies === 'All' || pet.species === filterSpecies;
     const matchesSearch = pet.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSpecies && matchesSearch;
   });
 
-  // Filter Users Logic
+  // UPDATED: Filter out Admins and the Current User!
   const filteredUsers = users.filter(user => {
-    const name = user.displayName || '';
-    return name.toLowerCase().includes(searchTerm.toLowerCase());
+    const name = getRescuerName(user);
+    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // 1. Ensure the user is not an admin
+    const isNotAdmin = user.role !== 'admin';
+    
+    // 2. Ensure the user is not the person currently looking at the screen
+    const isNotSelf = currentUser ? user.id !== currentUser.uid : true;
+
+    return matchesSearch && isNotAdmin && isNotSelf;
   });
 
   return (
@@ -152,7 +165,6 @@ export default function BrowsePets() {
             {filteredUsers.map((user) => (
               <div key={user.id} className="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-primary flex flex-col items-center p-6 text-center relative">
                 
-                {/* NEW: Small Banned Indicator on the Search Card */}
                 {user.isBanned && (
                   <div className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide shadow-sm">
                     Banned
@@ -160,15 +172,15 @@ export default function BrowsePets() {
                 )}
 
                 {user.profilePicUrl ? (
-                   <img src={user.profilePicUrl} alt={user.displayName} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${user.isBanned ? 'border-red-500 opacity-60' : 'border-primary'}`} />
+                   <img src={user.profilePicUrl} alt={getRescuerName(user)} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${user.isBanned ? 'border-red-500 opacity-60' : 'border-primary'}`} />
                 ) : (
                    <div className={`w-24 h-24 text-primary rounded-full flex items-center justify-center text-4xl font-bold mb-4 shadow-inner uppercase border-4 border-transparent ${user.isBanned ? 'bg-red-100 opacity-60' : 'bg-tertiary'}`}>
-                     {user.displayName ? user.displayName.charAt(0) : '?'}
+                     {getRescuerName(user).charAt(0)}
                    </div>
                 )}
                 
                 <h3 className={`text-xl font-bold mb-1 ${user.isBanned ? 'text-red-600' : 'text-primary'}`}>
-                  {user.displayName || 'Anonymous Rescuer'}
+                  {getRescuerName(user)}
                 </h3>
                 
                 <p className="text-gray-600 text-sm line-clamp-3 mb-6 flex-grow italic">

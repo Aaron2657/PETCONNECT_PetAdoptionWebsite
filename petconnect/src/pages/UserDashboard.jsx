@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'; // <-- Added deleteDoc
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 
@@ -66,20 +66,13 @@ export default function UserDashboard() {
     }
   };
 
-  // NEW FUNCTION: Handle Deleting a Pet
   const handleDeletePet = async (petId) => {
-    // 1. Ask the user to confirm so they don't click it by accident!
     const confirmDelete = window.confirm("Are you sure you want to delete this pet? This action cannot be undone.");
-    
-    if (!confirmDelete) return; // If they click 'Cancel', stop running the code.
+    if (!confirmDelete) return; 
 
     try {
-      // 2. Tell Firebase to permanently delete the document
       await deleteDoc(doc(db, 'pets', petId));
-      
-      // 3. Update the screen instantly to remove the pet card
       setMyPets(prevPets => prevPets.filter(pet => pet.id !== petId));
-      
     } catch (error) {
       console.error("Error deleting pet:", error);
       alert("Failed to delete the pet. Please try again.");
@@ -92,14 +85,15 @@ export default function UserDashboard() {
   return (
     <div className="container mx-auto mt-10 mb-10 px-4 max-w-5xl">
       
-      {/* Dashboard Header with Edit Profile Button */}
-      <div className="flex justify-between items-center mb-8 border-b-2 border-secondary pb-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 mb-8 border-b-2 border-secondary pb-4">
         <h2 className="text-3xl font-bold text-primary">My Dashboard</h2>
+        
+        {/* UPDATED: Changed from Edit Profile to View Profile */}
         <Link 
-          to="/edit-profile" 
-          className="bg-primary text-white px-4 py-2 rounded-md text-sm font-bold hover:bg-opacity-90 transition shadow-sm"
+          to={`/user/${currentUser.uid}`} 
+          className="bg-primary text-white px-6 py-2 rounded-md text-sm font-bold hover:bg-opacity-90 transition shadow-sm whitespace-nowrap text-center"
         >
-          Edit Public Profile
+          View Profile
         </Link>
       </div>
 
@@ -136,7 +130,6 @@ export default function UserDashboard() {
                       <option value="Adopted">Adopted</option>
                     </select>
                     
-                    {/* LINKS: View, Edit, and Delete */}
                     <div className="flex items-center space-x-3 pt-2">
                       <Link to={`/pet/${pet.id}`} className="text-tertiary text-sm font-bold hover:underline leading-none">View</Link>
                       <span className="text-gray-300 leading-none">|</span>
@@ -169,7 +162,10 @@ export default function UserDashboard() {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h4 className="font-bold text-lg text-primary">Application for {req.petName}</h4>
-                    <p className="text-sm text-gray-600"><strong>From:</strong> {req.adopterName} ({req.adopterEmail})</p>
+                    <div className="mt-1 text-sm text-gray-700">
+                      <p><strong>From:</strong> {req.adopterName} ({req.adopterEmail})</p>
+                      <p className="mt-1"><strong>Phone:</strong> {req.adopterPhone || 'Not provided'}</p>
+                    </div>
                   </div>
                   <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
                     ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
@@ -182,7 +178,7 @@ export default function UserDashboard() {
                 <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
                   <p className="text-sm text-gray-700"><strong>Message:</strong> "{req.message}"</p>
                 </div>
-                <div className="flex space-x-6 text-sm text-gray-600 mb-4">
+                <div className="flex flex-col sm:flex-row sm:space-x-6 text-sm text-gray-600 mb-4 space-y-2 sm:space-y-0">
                   <span><strong>Living Situation:</strong> {req.livingSituation}</span>
                   <span><strong>Other Pets:</strong> {req.hasOtherPets}</span>
                 </div>

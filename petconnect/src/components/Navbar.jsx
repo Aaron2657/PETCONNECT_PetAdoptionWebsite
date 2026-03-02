@@ -99,7 +99,6 @@ const Navbar = () => {
                     <p className="text-sm font-bold text-primary truncate">{currentUser.email}</p>
                   </div>
                   
-                  {/* Dashboard link locked out for Admins */}
                   {userProfile?.role !== 'admin' && (
                     <Link 
                       to="/dashboard" 
@@ -110,14 +109,14 @@ const Navbar = () => {
                     </Link>
                   )}
 
-                  {/* UPDATED: Edit Profile link locked out for Admins */}
+                  {/* UPDATED: Changed from Edit Profile to View Profile */}
                   {userProfile?.role !== 'admin' && (
                     <Link 
-                      to="/edit-profile" 
+                      to={`/user/${currentUser.uid}`} 
                       onClick={() => setDropdownOpen(false)}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-tertiary hover:text-primary transition"
                     >
-                      Edit Public Profile
+                      View Profile
                     </Link>
                   )}
 
@@ -177,14 +176,13 @@ const Navbar = () => {
                  <span className="text-sm font-medium text-gray-200 truncate">{currentUser.email}</span>
                </div>
                
-               {/* Dashboard link locked out for Admins */}
                {userProfile?.role !== 'admin' && (
                  <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">My Dashboard</Link>
                )}
                
-               {/* UPDATED: Edit Profile link locked out for Admins */}
+               {/* UPDATED: Changed from Edit Profile to View Profile for Mobile */}
                {userProfile?.role !== 'admin' && (
-                 <Link to="/edit-profile" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">Edit Profile</Link>
+                 <Link to={`/user/${currentUser.uid}`} onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">View Profile</Link>
                )}
 
                {userProfile?.role === 'admin' && (

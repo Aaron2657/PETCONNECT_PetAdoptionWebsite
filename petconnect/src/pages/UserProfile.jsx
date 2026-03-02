@@ -57,7 +57,7 @@ export default function UserProfile() {
     try {
       await addDoc(collection(db, 'reports'), {
         reportedUserId: id,
-        reportedUserName: userProfile.displayName,
+        reportedUserName: userProfile.displayName || 'Anonymous Rescuer', 
         reporterId: currentUser ? currentUser.uid : 'Anonymous', 
         reason: reason,
         status: 'Pending',
@@ -71,7 +71,7 @@ export default function UserProfile() {
   };
 
   const handleBanUser = async () => {
-    const confirmBan = window.confirm(`Are you sure you want to instantly ban ${userProfile.displayName}?`);
+    const confirmBan = window.confirm(`Are you sure you want to instantly ban ${userProfile.displayName || 'this user'}?`);
     if (!confirmBan) return;
 
     try {
@@ -99,15 +99,15 @@ export default function UserProfile() {
         )}
 
         {userProfile.profilePicUrl ? (
-           <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${userProfile.isBanned ? 'border-red-600 opacity-50 grayscale' : 'border-primary'}`} />
+           <img src={userProfile.profilePicUrl} alt={userProfile.displayName || 'Rescuer'} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${userProfile.isBanned ? 'border-red-600 opacity-50 grayscale' : 'border-primary'}`} />
         ) : (
            <div className={`w-24 h-24 text-white rounded-full flex items-center justify-center text-4xl font-bold mb-4 shadow-inner uppercase border-4 border-transparent ${userProfile.isBanned ? 'bg-red-800 opacity-50' : 'bg-primary'}`}>
-             {userProfile.displayName.charAt(0)}
+             {userProfile.displayName ? userProfile.displayName.charAt(0) : '?'}
            </div>
         )}
         
         <h2 className={`text-3xl font-bold ${userProfile.isBanned ? 'text-red-700 line-through' : 'text-primary'}`}>
-          {userProfile.displayName}
+          {userProfile.displayName || 'Anonymous Rescuer'}
         </h2>
         
         {userProfile.bio ? (
@@ -116,7 +116,16 @@ export default function UserProfile() {
            <p className="text-gray-500 mt-2 font-medium">Dedicated PetConnect Rescuer</p>
         )}
 
-        {/* UPDATED LOGIC: Only show moderation buttons if it's NOT their own profile! */}
+        {/* NEW: Show Edit Profile button if this is the current user's profile! */}
+        {currentUser && currentUser.uid === id && (
+          <Link 
+            to="/edit-profile" 
+            className="mt-6 bg-secondary text-primary font-bold py-2 px-8 rounded hover:bg-opacity-90 transition shadow-sm"
+          >
+            Edit Profile
+          </Link>
+        )}
+
         {!userProfile.isBanned && (!currentUser || currentUser.uid !== id) && (
           isAdmin ? (
             <button 
