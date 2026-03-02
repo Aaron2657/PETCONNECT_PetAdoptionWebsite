@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom'; // NEW: Added useNavigate
-// NEW: Added deleteDoc to the imports
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 export default function PetDetails() {
   const { id } = useParams();
   const { currentUser } = useAuth(); 
-  const navigate = useNavigate(); // NEW: Initialize navigate
+  const navigate = useNavigate();
   
   const [pet, setPet] = useState(null);
   const [rescuerPhone, setRescuerPhone] = useState('');
@@ -16,6 +15,9 @@ export default function PetDetails() {
   const [error, setError] = useState('');
   const [isApprovedAdopter, setIsApprovedAdopter] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // NEW: Track if the viewer is an admin
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const fetchPetAndStatus = async () => {
@@ -38,6 +40,12 @@ export default function PetDetails() {
         }
 
         if (currentUser) {
+          // NEW: Check if the logged-in user is an admin
+          const viewerDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (viewerDoc.exists() && viewerDoc.data().role === 'admin') {
+            setIsAdmin(true);
+          }
+
           const statusQuery = query(
             collection(db, 'adoptionRequests'),
             where('petId', '==', id),
@@ -61,7 +69,6 @@ export default function PetDetails() {
     fetchPetAndStatus();
   }, [id, currentUser]);
 
-  // NEW: Handle Deleting the Pet
   const handleDelete = async () => {
     const confirmDelete = window.confirm("Are you sure you want to permanently delete this pet post?");
     if (!confirmDelete) return;
@@ -69,7 +76,7 @@ export default function PetDetails() {
     try {
       await deleteDoc(doc(db, 'pets', id));
       alert("Pet post deleted successfully.");
-      navigate('/browse'); // Send them back to the browse page after deleting
+      navigate('/browse'); 
     } catch (err) {
       console.error(err);
       alert("Failed to delete the pet post.");
@@ -185,7 +192,7 @@ export default function PetDetails() {
             </div>
           </div>
           
-          {/* UPDATED: Button Logic - Rescuer sees Edit/Delete, Approved Adopter sees message, Others see Adopt */}
+          {/* UPDATED: If they are an admin, lock the button down! */}
           {currentUser && currentUser.uid === pet.rescuerId ? (
             <div className="flex space-x-4 mt-auto">
               <Link 
@@ -204,6 +211,10 @@ export default function PetDetails() {
           ) : isApprovedAdopter ? (
              <div className="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mt-auto text-center font-bold">
                🎉 You are approved to adopt {pet.name}! Please contact the rescuer to finalize.
+             </div>
+          ) : isAdmin ? (
+             <div className="bg-gray-100 border border-gray-300 text-gray-500 px-4 py-3 rounded mt-auto text-center font-bold text-sm">
+               Administrative accounts cannot submit adoption requests.
              </div>
           ) : (
             <Link 

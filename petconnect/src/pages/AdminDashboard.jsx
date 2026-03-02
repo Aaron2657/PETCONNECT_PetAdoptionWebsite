@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // NEW: Added Link import
 
 export default function AdminDashboard() {
   const { currentUser } = useAuth();
@@ -20,16 +20,13 @@ export default function AdminDashboard() {
       }
 
       try {
-        // 1. Verify this user if it is an admin
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists() && userDoc.data().role === 'admin') {
           setIsAdmin(true);
           
-          // 2. Fetch all reports
           const reportsQuery = await getDocs(collection(db, 'reports'));
           setReports(reportsQuery.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } else {
-          // Kick them out if they aren't an admin
           navigate('/');
         }
       } catch (error) {
@@ -56,13 +53,9 @@ export default function AdminDashboard() {
     if (!confirmBan) return;
 
     try {
-      // 1. Mark the user as banned in the users collection
       await updateDoc(doc(db, 'users', reportedUserId), { isBanned: true });
-      
-      // 2. Mark the report as resolved
       await updateDoc(doc(db, 'reports', reportId), { status: 'User Banned' });
       
-      // 3. Update UI
       setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: 'User Banned' } : r));
       alert("User has been banned successfully.");
     } catch (error) {
@@ -95,7 +88,18 @@ export default function AdminDashboard() {
                     report.status === 'Dismissed' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>
                   {report.status}
                 </span>
-                <p className="text-lg text-primary"><strong>Reported User:</strong> {report.reportedUserName}</p>
+                
+                {/* UPDATED: Made the Reported User name a clickable link */}
+                <p className="text-lg text-primary mb-1">
+                  <strong>Reported User:</strong>{' '}
+                  <Link 
+                    to={`/user/${report.reportedUserId}`} 
+                    className="text-secondary font-bold hover:underline"
+                  >
+                    {report.reportedUserName}
+                  </Link>
+                </p>
+                
                 <p className="text-gray-600"><strong>Reason:</strong> {report.reason}</p>
                 <p className="text-xs text-gray-400 mt-2">Reported by ID: {report.reporterId}</p>
               </div>

@@ -47,7 +47,7 @@ export default function BrowsePets() {
   }, []);
 
   if (loading) {
-    return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading directory...</div>;
+    return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading Fur Friends...</div>;
   }
 
   // Filter Pets Logic

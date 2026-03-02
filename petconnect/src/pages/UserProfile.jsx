@@ -1,25 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-// UPDATED: Added updateDoc for the ban function
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
-// NEW: Import useAuth to check who is viewing the page
 import { useAuth } from '../context/AuthContext';
 
 export default function UserProfile() {
   const { id } = useParams(); 
-  const { currentUser } = useAuth(); // NEW: Grab the current logged-in user
+  const { currentUser } = useAuth(); 
   
   const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '', isBanned: false });
   const [pets, setPets] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const [isAdmin, setIsAdmin] = useState(false); // NEW: State to track if the viewer is an admin
+  const [isAdmin, setIsAdmin] = useState(false); 
 
   useEffect(() => {
     const fetchUserAndPets = async () => {
       try {
-        // NEW: Check if the person viewing this profile is an admin!
         if (currentUser) {
           const viewerDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (viewerDoc.exists() && viewerDoc.data().role === 'admin') {
@@ -27,7 +24,6 @@ export default function UserProfile() {
           }
         }
 
-        // Fetch the profile being viewed
         const userDoc = await getDoc(doc(db, 'users', id));
         if (userDoc.exists()) {
           setUserProfile(userDoc.data());
@@ -74,16 +70,12 @@ export default function UserProfile() {
     }
   };
 
-  // NEW: Instant Ban Function for Admins
   const handleBanUser = async () => {
     const confirmBan = window.confirm(`Are you sure you want to instantly ban ${userProfile.displayName}?`);
     if (!confirmBan) return;
 
     try {
-      // 1. Update the database
       await updateDoc(doc(db, 'users', id), { isBanned: true });
-      
-      // 2. Instantly update the screen so the red warning banner appears!
       setUserProfile(prev => ({ ...prev, isBanned: true }));
       alert("User has been banned successfully.");
     } catch (error) {
@@ -97,7 +89,6 @@ export default function UserProfile() {
   return (
     <div className="container mx-auto mt-10 mb-10 px-4">
       
-      {/* Profile Header */}
       <div className={`bg-white rounded-lg shadow-md p-8 mb-8 border-t-4 text-center max-w-3xl mx-auto flex flex-col items-center ${userProfile.isBanned ? 'border-red-600' : 'border-secondary'}`}>
         
         {userProfile.isBanned && (
@@ -125,8 +116,8 @@ export default function UserProfile() {
            <p className="text-gray-500 mt-2 font-medium">Dedicated PetConnect Rescuer</p>
         )}
 
-        {/* UPDATED: Dynamic Button Logic */}
-        {!userProfile.isBanned && (
+        {/* UPDATED LOGIC: Only show moderation buttons if it's NOT their own profile! */}
+        {!userProfile.isBanned && (!currentUser || currentUser.uid !== id) && (
           isAdmin ? (
             <button 
               onClick={handleBanUser}
