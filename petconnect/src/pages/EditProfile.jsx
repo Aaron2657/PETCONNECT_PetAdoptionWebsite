@@ -8,8 +8,10 @@ export default function EditProfile() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
-  const [displayName, setDisplayName] = useState('');
-  const [phone, setPhone] = useState(''); // NEW: Phone state
+  // UPDATED: Replaced displayName with firstName and lastName states
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState(''); 
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState(null);
   const [existingPicUrl, setExistingPicUrl] = useState('');
@@ -18,7 +20,6 @@ export default function EditProfile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch their existing profile when the page loads
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
@@ -30,13 +31,25 @@ export default function EditProfile() {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
-          setDisplayName(data.displayName || currentUser.displayName || '');
-          // NEW: Grab the phone number (checking both potential variable names just in case)
+          
+          // UPDATED: Load first and last name separately
+          if (data.firstName || data.lastName) {
+            setFirstName(data.firstName || '');
+            setLastName(data.lastName || '');
+          } else if (data.displayName || currentUser.displayName) {
+            // Clever fallback: If it's an old account that only has a Display Name, split it!
+            const names = (data.displayName || currentUser.displayName).split(' ');
+            setFirstName(names[0] || '');
+            setLastName(names.slice(1).join(' ') || '');
+          }
+
           setPhone(data.phone || data.phoneNumber || ''); 
           setBio(data.bio || '');
           setExistingPicUrl(data.profilePicUrl || '');
-        } else {
-          setDisplayName(currentUser.displayName || '');
+        } else if (currentUser.displayName) {
+          const names = currentUser.displayName.split(' ');
+          setFirstName(names[0] || '');
+          setLastName(names.slice(1).join(' ') || '');
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
@@ -56,7 +69,6 @@ export default function EditProfile() {
     try {
       let finalPicUrl = existingPicUrl;
 
-      // If they selected a new picture, upload it to Cloudinary first!
       if (profilePic) {
         const formData = new FormData();
         formData.append('file', profilePic);
@@ -73,17 +85,21 @@ export default function EditProfile() {
         finalPicUrl = imageData.secure_url;
       }
 
+      // We combine them so older pages that still look for displayName won't break!
+      const combinedName = `${firstName} ${lastName}`.trim() || 'Anonymous';
+
       // Save everything to the 'users' collection in Firebase
       await setDoc(doc(db, 'users', currentUser.uid), {
-        displayName: displayName || 'Anonymous',
+        firstName: firstName,
+        lastName: lastName,
+        displayName: combinedName, // Kept for backwards compatibility
         email: currentUser.email,
-        phone: phone, // NEW: Save the updated phone number!
+        phone: phone, 
         bio: bio,
         profilePicUrl: finalPicUrl,
         updatedAt: new Date()
-      }, { merge: true }); // Merge ensures we don't overwrite anything else by accident
+      }, { merge: true }); 
 
-      // Send them to their public profile so they can see the changes!
       navigate(`/user/${currentUser.uid}`);
       
     } catch (err) {
@@ -107,7 +123,6 @@ export default function EditProfile() {
         {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Profile Picture Upload */}
           <div className="flex items-center space-x-6">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 border-2 border-primary flex-shrink-0">
               {profilePic ? (
@@ -116,7 +131,7 @@ export default function EditProfile() {
                 <img src={existingPicUrl} alt="Current Profile" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-3xl font-bold uppercase">
-                  {displayName ? displayName.charAt(0) : '?'}
+                  {firstName ? firstName.charAt(0) : '?'}
                 </div>
               )}
             </div>
@@ -131,31 +146,42 @@ export default function EditProfile() {
             </div>
           </div>
 
+          {/* UPDATED: Split First and Last Name Inputs */}
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
             <div className="w-full sm:w-1/2">
-              <label className="block text-gray-700 font-semibold mb-2">Display Name</label>
+              <label className="block text-gray-700 font-semibold mb-2">First Name</label>
               <input 
                 type="text" 
-                value={displayName} 
-                onChange={(e) => setDisplayName(e.target.value)} 
+                value={firstName} 
+                onChange={(e) => setFirstName(e.target.value)} 
                 required 
-                placeholder="e.g. John Doe Rescue"
+                placeholder="e.g. Jane"
                 className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
               />
             </div>
-
-            {/* NEW: Phone Number Input */}
             <div className="w-full sm:w-1/2">
-              <label className="block text-gray-700 font-semibold mb-2">Phone Number</label>
+              <label className="block text-gray-700 font-semibold mb-2">Last Name</label>
               <input 
-                type="tel" 
-                value={phone} 
-                onChange={(e) => setPhone(e.target.value)} 
+                type="text" 
+                value={lastName} 
+                onChange={(e) => setLastName(e.target.value)} 
                 required 
-                placeholder="e.g. 09123456789"
+                placeholder="e.g. Doe"
                 className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-2">Phone Number</label>
+            <input 
+              type="tel" 
+              value={phone} 
+              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))} 
+              required 
+              placeholder="e.g. 09123456789"
+              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
+            />
           </div>
 
           <div>

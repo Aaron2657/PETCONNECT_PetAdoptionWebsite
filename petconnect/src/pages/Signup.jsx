@@ -13,7 +13,7 @@ export default function Signup() {
   const { signup, logout } = useAuth();
   
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(''); // NEW: State for our success message
+  const [success, setSuccess] = useState(''); 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -38,7 +38,7 @@ export default function Signup() {
         phoneRef.current.value
       );
 
-      // 2. Firebase auto-logs them in. We instantly log them out!
+      // 2. if Firebase auto-logs them in. We instantly log them out!
       if (logout) {
         await logout();
       }
@@ -65,7 +65,7 @@ export default function Signup() {
         {/* Error Message */}
         {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
         
-        {/* NEW: Success Message */}
+        {/* Success Message */}
         {success && (
           <div className="bg-green-100 border border-green-500 text-green-800 px-4 py-3 rounded mb-4 font-bold text-center shadow-sm">
             {success}
@@ -86,7 +86,15 @@ export default function Signup() {
 
           <div>
             <label className="block text-gray-700 font-semibold mb-2">Phone Number</label>
-            <input type="tel" ref={phoneRef} required disabled={success !== ''} placeholder="e.g. 09123456789" className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary disabled:bg-gray-100" />
+            <input 
+              type="tel" 
+              ref={phoneRef} 
+              onInput={(e) => e.target.value = e.target.value.replace(/[^0-9]/g, '')}
+              required 
+              disabled={success !== ''} 
+              placeholder="e.g. 09123456789" 
+              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary disabled:bg-gray-100" 
+            />
           </div>
 
           <div>

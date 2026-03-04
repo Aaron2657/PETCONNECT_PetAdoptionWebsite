@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc } from 'firebase/firestore'; 
+// UPDATED: Imported onSnapshot for real-time live updates!
+import { doc, onSnapshot } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 
 const Navbar = () => {
@@ -13,26 +14,26 @@ const Navbar = () => {
   const navigate = useNavigate();
   const dropdownRef = useRef(null); 
 
+  // UPDATED: Live listener for instant profile updates
   useEffect(() => {
     if (!currentUser) {
       setUserProfile(null); 
       return;
     }
 
-    const fetchUserProfile = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (userDoc.exists()) {
-          setUserProfile(userDoc.data());
-        } else {
-          setUserProfile({ displayName: currentUser.displayName || currentUser.email, bio: '', profilePicUrl: '' });
-        }
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
+    // onSnapshot creates a live connection to this user's document
+    const unsubscribe = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setUserProfile(docSnap.data());
+      } else {
+        setUserProfile({ displayName: currentUser.displayName || currentUser.email, bio: '', profilePicUrl: '' });
       }
-    };
+    }, (error) => {
+      console.error("Error fetching user profile:", error);
+    });
 
-    fetchUserProfile();
+    // Cleanup the live connection when they log out or leave
+    return () => unsubscribe();
   }, [currentUser]);
 
   useEffect(() => {
@@ -55,11 +56,20 @@ const Navbar = () => {
     }
   };
 
+  const getDisplayName = () => {
+    if (userProfile?.firstName && userProfile?.lastName) {
+      return `${userProfile.firstName} ${userProfile.lastName}`;
+    }
+    if (userProfile?.firstName) return userProfile.firstName;
+    if (userProfile?.displayName) return userProfile.displayName;
+    if (currentUser?.displayName) return currentUser.displayName;
+    if (currentUser?.email) return currentUser.email.split('@')[0]; 
+    return 'User';
+  };
+
   const getInitial = () => {
-    if (userProfile?.displayName) return userProfile.displayName.charAt(0).toUpperCase();
-    if (currentUser?.displayName) return currentUser.displayName.charAt(0).toUpperCase();
-    if (currentUser?.email) return currentUser.email.charAt(0).toUpperCase();
-    return '?';
+    const name = getDisplayName();
+    return name.charAt(0).toUpperCase();
   };
 
   return (
@@ -80,13 +90,13 @@ const Navbar = () => {
                 className="flex items-center space-x-2 focus:outline-none hover:opacity-80 transition ml-4 border-l border-gray-500 pl-6"
               >
                 {userProfile?.profilePicUrl ? (
-                   <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
+                   <img src={userProfile.profilePicUrl} alt={getDisplayName()} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
                 ) : (
                    <div className="w-10 h-10 bg-tertiary text-primary rounded-full flex items-center justify-center font-bold shadow-sm uppercase">
                       {getInitial()}
                    </div>
                 )}
-                <span className="text-sm font-medium">{userProfile?.displayName || currentUser.displayName || currentUser.email}</span>
+                <span className="text-sm font-medium">{getDisplayName()}</span>
                 <svg className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -109,7 +119,6 @@ const Navbar = () => {
                     </Link>
                   )}
 
-                  {/* UPDATED: Changed from Edit Profile to View Profile */}
                   {userProfile?.role !== 'admin' && (
                     <Link 
                       to={`/user/${currentUser.uid}`} 
@@ -167,20 +176,19 @@ const Navbar = () => {
              <div className="border-t border-gray-600 pt-2 mt-2">
                <div className="px-4 py-2 flex items-center space-x-3 mb-2">
                  {userProfile?.profilePicUrl ? (
-                    <img src={userProfile.profilePicUrl} alt={userProfile.displayName} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
+                    <img src={userProfile.profilePicUrl} alt={getDisplayName()} className="w-10 h-10 rounded-full object-cover border-4 border-primary shadow-sm" />
                  ) : (
                     <div className="w-10 h-10 bg-tertiary text-primary rounded-full flex items-center justify-center font-bold shadow-sm uppercase">
                        {getInitial()}
                     </div>
                  )}
-                 <span className="text-sm font-medium text-gray-200 truncate">{currentUser.email}</span>
+                 <span className="text-sm font-medium text-gray-200 truncate">{getDisplayName()}</span>
                </div>
                
                {userProfile?.role !== 'admin' && (
                  <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">My Dashboard</Link>
                )}
                
-               {/* UPDATED: Changed from Edit Profile to View Profile for Mobile */}
                {userProfile?.role !== 'admin' && (
                  <Link to={`/user/${currentUser.uid}`} onClick={() => setIsOpen(false)} className="block hover:bg-gray-700 px-4 py-2 rounded text-tertiary font-bold">View Profile</Link>
                )}

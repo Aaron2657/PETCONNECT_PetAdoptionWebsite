@@ -12,7 +12,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   
-  // NEW: State to track which report cards are expanded
   const [expandedGroups, setExpandedGroups] = useState({});
 
   useEffect(() => {
@@ -42,7 +41,6 @@ export default function AdminDashboard() {
     checkAdminAndFetchReports();
   }, [currentUser, navigate]);
 
-  // NEW: Toggle function for the dropdowns
   const toggleGroup = (userId) => {
     setExpandedGroups(prev => ({
       ...prev,
@@ -50,19 +48,15 @@ export default function AdminDashboard() {
     }));
   };
 
-  // UPDATED: Now dismisses ALL pending reports for this specific user at once
   const handleDismissUserReports = async (reportedUserId) => {
     try {
-      // Find all reports for this user that are currently pending
       const pendingReports = reports.filter(r => r.reportedUserId === reportedUserId && r.status === 'Pending');
       
-      // Update them all in Firestore simultaneously
       const updatePromises = pendingReports.map(report => 
         updateDoc(doc(db, 'reports', report.id), { status: 'Dismissed' })
       );
       await Promise.all(updatePromises);
 
-      // Update local state so the UI reflects the change instantly
       setReports(prev => prev.map(r => 
         r.reportedUserId === reportedUserId ? { ...r, status: 'Dismissed' } : r
       ));
@@ -72,23 +66,19 @@ export default function AdminDashboard() {
     }
   };
 
-  // UPDATED: Bans the user and updates ALL their tied reports to "User Banned"
   const handleBanUser = async (reportedUserId) => {
     const confirmBan = window.confirm("Are you sure you want to ban this user? This will lock their account and resolve all pending reports against them.");
     if (!confirmBan) return;
 
     try {
-      // 1. Ban the actual user account
       await updateDoc(doc(db, 'users', reportedUserId), { isBanned: true });
       
-      // 2. Find all their reports and update them
       const userReports = reports.filter(r => r.reportedUserId === reportedUserId);
       const updatePromises = userReports.map(report => 
         updateDoc(doc(db, 'reports', report.id), { status: 'User Banned' })
       );
       await Promise.all(updatePromises);
       
-      // 3. Update local state
       setReports(prev => prev.map(r => 
         r.reportedUserId === reportedUserId ? { ...r, status: 'User Banned' } : r
       ));
@@ -103,20 +93,18 @@ export default function AdminDashboard() {
   if (loading) return <div className="text-center mt-20 text-xl font-bold text-primary">Loading Admin Panel...</div>;
   if (!isAdmin) return null; 
 
-  // NEW: Group the raw reports array by the Reported User's ID
   const groupedReports = Object.values(reports.reduce((acc, report) => {
     if (!acc[report.reportedUserId]) {
       acc[report.reportedUserId] = {
         reportedUserId: report.reportedUserId,
         reportedUserName: report.reportedUserName,
         reportsList: [],
-        groupStatus: 'Dismissed' // Default, will be overridden if any are pending
+        groupStatus: 'Dismissed' 
       };
     }
     
     acc[report.reportedUserId].reportsList.push(report);
     
-    // If even a single report in this group is Pending, the whole group needs Admin attention
     if (report.status === 'Pending') {
       acc[report.reportedUserId].groupStatus = 'Pending';
     } else if (report.status === 'User Banned') {
@@ -142,7 +130,6 @@ export default function AdminDashboard() {
           {groupedReports.map(group => (
             <div key={group.reportedUserId} className="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-yellow-500">
               
-              {/* Group Header - Always visible */}
               <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50">
                 <div className="mb-4 md:mb-0">
                   <div className="flex items-center space-x-3 mb-2">
@@ -185,7 +172,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Group Body - Dropdown expanded view */}
               {expandedGroups[group.reportedUserId] && (
                 <div className="p-6 border-t border-gray-100 bg-white">
                   <h4 className="font-bold text-gray-700 mb-4 border-b pb-2">Individual Complaints</h4>
@@ -198,7 +184,6 @@ export default function AdminDashboard() {
                         <div>
                           <p className="text-gray-800 mb-1"><strong>Reason:</strong> "{report.reason}"</p>
                           <p className="text-xs text-gray-500">Reported by ID: {report.reporterId}</p>
-                          <p className="text-xs text-gray-400 mt-1">Status: {report.status}</p>
                         </div>
                       </div>
                     ))}
