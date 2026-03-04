@@ -26,7 +26,7 @@ export default function Home() {
               to="/post-pet" 
               className="bg-tertiary text-primary px-8 py-4 rounded-lg shadow-lg hover:bg-opacity-90 transition font-bold text-lg text-center"
             >
-              Post a Rescue
+              Post a Pet for Adoption
             </Link>
           </div>
         </div>
