@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom'; // NEW: Added useNavigate
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 export default function UserProfile() {
   const { id } = useParams(); 
   const { currentUser } = useAuth(); 
-  const navigate = useNavigate(); // NEW: Initialize navigate
+  const navigate = useNavigate();
   
   const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '', isBanned: false });
   const [pets, setPets] = useState([]);
@@ -51,6 +51,15 @@ export default function UserProfile() {
     fetchUserAndPets();
   }, [id, currentUser]);
 
+  // NEW: Helper function to grab the correct name fields from the database
+  const getDisplayName = (profile) => {
+    if (!profile) return 'Anonymous Rescuer';
+    if (profile.displayName) return profile.displayName;
+    if (profile.firstName && profile.lastName) return `${profile.firstName} ${profile.lastName}`;
+    if (profile.firstName) return profile.firstName;
+    return 'Anonymous Rescuer';
+  };
+
   const handleReportUser = async () => {
     const reason = window.prompt("Why are you reporting this user? (e.g., Fake account, inappropriate behavior)");
     if (!reason) return; 
@@ -58,7 +67,8 @@ export default function UserProfile() {
     try {
       await addDoc(collection(db, 'reports'), {
         reportedUserId: id,
-        reportedUserName: userProfile.displayName || 'Anonymous Rescuer', 
+        // UPDATED: Now uses our helper function so the Admin knows exactly who is reported!
+        reportedUserName: getDisplayName(userProfile), 
         reporterId: currentUser ? currentUser.uid : 'Anonymous', 
         reason: reason,
         status: 'Pending',
@@ -72,7 +82,7 @@ export default function UserProfile() {
   };
 
   const handleBanUser = async () => {
-    const confirmBan = window.confirm(`Are you sure you want to instantly ban ${userProfile.displayName || 'this user'}?`);
+    const confirmBan = window.confirm(`Are you sure you want to instantly ban ${getDisplayName(userProfile)}?`);
     if (!confirmBan) return;
 
     try {
@@ -87,7 +97,6 @@ export default function UserProfile() {
 
   if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading profile...</div>;
 
-  // NEW: Completely block access for guests!
   if (!currentUser) {
     return (
       <div className="text-center mt-20 px-4">
@@ -115,16 +124,18 @@ export default function UserProfile() {
           </div>
         )}
 
+        {/* UPDATED: Uses getDisplayName for the avatar alt text and initial */}
         {userProfile.profilePicUrl ? (
-           <img src={userProfile.profilePicUrl} alt={userProfile.displayName || 'Rescuer'} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${userProfile.isBanned ? 'border-red-600 opacity-50 grayscale' : 'border-primary'}`} />
+           <img src={userProfile.profilePicUrl} alt={getDisplayName(userProfile)} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${userProfile.isBanned ? 'border-red-600 opacity-50 grayscale' : 'border-primary'}`} />
         ) : (
            <div className={`w-24 h-24 text-white rounded-full flex items-center justify-center text-4xl font-bold mb-4 shadow-inner uppercase border-4 border-transparent ${userProfile.isBanned ? 'bg-red-800 opacity-50' : 'bg-primary'}`}>
-             {userProfile.displayName ? userProfile.displayName.charAt(0) : '?'}
+             {getDisplayName(userProfile).charAt(0)}
            </div>
         )}
         
+        {/* UPDATED: Uses getDisplayName for the big header name */}
         <h2 className={`text-3xl font-bold ${userProfile.isBanned ? 'text-red-700 line-through' : 'text-primary'}`}>
-          {userProfile.displayName || 'Anonymous Rescuer'}
+          {getDisplayName(userProfile)}
         </h2>
         
         {userProfile.bio ? (
