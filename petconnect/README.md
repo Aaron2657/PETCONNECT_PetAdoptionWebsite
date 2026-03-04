@@ -9,7 +9,7 @@ PetConnect is a comprehensive web-based platform designed to facilitate pet adop
 - **Profile Management**: Users can view and edit their personal profile information.
 - **Dashboards**: 
   - **User Dashboard**: Personalized space for users to manage their adoption requests and profile.
-  - **Admin Dashboard**: Centralized control panel for administrators to oversee users, pet listings, and adoption requests.
+  - **Admin Dashboard**: Centralized control panel for administrators to oversee users, and pet listings
 
 ### Pet Management
 - **Browse Pets**: Interactive catalog to view pets available for adoption with filtering options.
