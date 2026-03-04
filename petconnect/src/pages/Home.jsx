@@ -35,8 +35,8 @@ export default function Home() {
         <div className="md:w-1/2 w-full">
           <img 
             // Using a high-quality free Unsplash image as a placeholder!
-            src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=1000&auto=format&fit=crop" 
-            alt="Happy rescued dog. This is an AI generated image btw" 
+            src="https://res.cloudinary.com/drvxsajim/image/upload/v1772611132/image-400x400_c65djc.png" 
+            alt="Image of young Chloe" 
             className="rounded-2xl shadow-2xl object-cover w-full h-[400px] lg:h-[500px] border-4 border-white"
           />
         </div>
