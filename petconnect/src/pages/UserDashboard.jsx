@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'; 
+// UPDATED: Added getDoc to the import list
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 
@@ -27,7 +28,22 @@ export default function UserDashboard() {
 
         const sentQuery = query(collection(db, 'adoptionRequests'), where('adopterId', '==', currentUser.uid));
         const sentSnap = await getDocs(sentQuery);
-        setSentRequests(sentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        
+        // UPDATED: If the application is approved, fetch the rescuer's contact info!
+        const sentRequestsWithRescuerInfo = await Promise.all(sentSnap.docs.map(async (requestDoc) => {
+          const reqData = { id: requestDoc.id, ...requestDoc.data() };
+          
+          if (reqData.status === 'Approved') {
+            const rescuerDoc = await getDoc(doc(db, 'users', reqData.rescuerId));
+            if (rescuerDoc.exists()) {
+              reqData.rescuerEmail = rescuerDoc.data().email;
+              reqData.rescuerPhone = rescuerDoc.data().phone || rescuerDoc.data().phoneNumber || 'Not provided';
+            }
+          }
+          return reqData;
+        }));
+
+        setSentRequests(sentRequestsWithRescuerInfo);
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -88,7 +104,6 @@ export default function UserDashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 mb-8 border-b-2 border-secondary pb-4">
         <h2 className="text-3xl font-bold text-primary">My Dashboard</h2>
         
-        {/* UPDATED: Changed from Edit Profile to View Profile */}
         <Link 
           to={`/user/${currentUser.uid}`} 
           className="bg-primary text-white px-6 py-2 rounded-md text-sm font-bold hover:bg-opacity-90 transition shadow-sm whitespace-nowrap text-center"
@@ -205,25 +220,43 @@ export default function UserDashboard() {
         )}
       </div>
 
-      {/* Section 3: Sent Applications */}
+      {/* Section 3: Sent Applications (UPDATED) */}
       <div>
         <h3 className="text-2xl font-semibold text-primary mb-4">My Adoption Applications</h3>
         {sentRequests.length === 0 ? (
           <p className="text-gray-500 bg-white p-4 rounded-lg shadow-sm border border-gray-100">You haven't applied to adopt any pets yet.</p>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sentRequests.map(req => (
-              <div key={req.id} className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-primary flex justify-between items-center">
-                <div>
-                  <h4 className="font-bold text-primary">Applied for: {req.petName}</h4>
-                  <p className="text-sm text-gray-500">Message: {req.message.substring(0, 60)}...</p>
-                </div>
-                 <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
-                    ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
-                      req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
-                      'bg-yellow-100 text-yellow-800'}`}>
+              <div key={req.id} className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-primary flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="font-bold text-primary text-lg">Applied for: {req.petName}</h4>
+                    <p className="text-sm text-gray-500 mt-1">Message: {req.message.substring(0, 60)}...</p>
+                  </div>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
+                      ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                        req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
+                        'bg-yellow-100 text-yellow-800'}`}>
                     {req.status}
                   </span>
+                </div>
+
+                {/* UPDATED: Only show the contact info if approved! */}
+                {req.status === 'Approved' && (
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-md mb-4 mt-2">
+                    <p className="text-sm text-green-800 font-bold mb-2">🎉 Approved! Contact the rescuer:</p>
+                    <p className="text-sm text-gray-700"><strong>Email:</strong> {req.rescuerEmail}</p>
+                    <p className="text-sm text-gray-700"><strong>Phone:</strong> {req.rescuerPhone}</p>
+                  </div>
+                )}
+
+                {/* UPDATED: New Link to view the pet post */}
+                <div className="mt-auto pt-4 border-t border-gray-100">
+                  <Link to={`/pet/${req.petId}`} className="text-secondary font-bold text-sm hover:underline flex items-center">
+                    View Pet Post &rarr;
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
