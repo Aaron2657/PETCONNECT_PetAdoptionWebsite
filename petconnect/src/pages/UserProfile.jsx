@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore'; 
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,14 +9,16 @@ export default function UserProfile() {
   const { currentUser } = useAuth(); 
   const navigate = useNavigate();
   
-  const [userProfile, setUserProfile] = useState({ displayName: 'Rescuer', bio: '', profilePicUrl: '', isBanned: false });
-  const [pets, setPets] = useState([]);
+  const [userProfile, setUserProfile] = useState({ firstName: '', lastName: '', bio: '', profilePicUrl: '', isBanned: false });
+  const [postedPets, setPostedPets] = useState([]);
+  const [adoptedPets, setAdoptedPets] = useState([]); 
   const [loading, setLoading] = useState(true);
   
+  const [activeTab, setActiveTab] = useState('posted');
   const [isAdmin, setIsAdmin] = useState(false); 
 
   useEffect(() => {
-    const fetchUserAndPets = async () => {
+    const fetchUserAndHistory = async () => {
       try {
         if (currentUser) {
           const viewerDoc = await getDoc(doc(db, 'users', currentUser.uid));
@@ -28,186 +30,210 @@ export default function UserProfile() {
         const userDoc = await getDoc(doc(db, 'users', id));
         if (userDoc.exists()) {
           setUserProfile(userDoc.data());
+        } else {
+          setLoading(false);
+          return;
         }
 
-        const petsQuery = query(collection(db, 'pets'), where('rescuerId', '==', id));
-        const petsSnap = await getDocs(petsQuery);
-        
-        const allPets = petsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const availablePets = allPets.filter(pet => !pet.status || pet.status === 'Available');
-        
-        if (!userDoc.exists() && allPets.length > 0) {
-           setUserProfile({ displayName: allPets[0].rescuerName || 'Anonymous Rescuer', bio: '', profilePicUrl: '', isBanned: false });
-        }
+        const postedQuery = query(collection(db, 'pets'), where('rescuerId', '==', id));
+        const postedSnap = await getDocs(postedQuery);
+        setPostedPets(postedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-        setPets(availablePets);
+        const adoptedReqQuery = query(collection(db, 'adoptionRequests'), where('adopterId', '==', id), where('status', '==', 'Approved'));
+        const adoptedReqSnap = await getDocs(adoptedReqQuery);
+        
+        const adoptedPetsList = [];
+        for (const request of adoptedReqSnap.docs) {
+          const petRef = doc(db, 'pets', request.data().petId);
+          const petSnap = await getDoc(petRef);
+          if (petSnap.exists()) {
+            adoptedPetsList.push({ id: petSnap.id, ...petSnap.data() });
+          }
+        }
+        setAdoptedPets(adoptedPetsList);
+
       } catch (error) {
-        console.error("Error fetching user profile:", error);
+        console.error("Error fetching profile data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUserAndPets();
+    fetchUserAndHistory();
   }, [id, currentUser]);
 
-  // NEW: Helper function to grab the correct name fields from the database
-  const getDisplayName = (profile) => {
-    if (!profile) return 'Anonymous Rescuer';
-    if (profile.displayName) return profile.displayName;
-    if (profile.firstName && profile.lastName) return `${profile.firstName} ${profile.lastName}`;
-    if (profile.firstName) return profile.firstName;
-    return 'Anonymous Rescuer';
-  };
-
-  const handleReportUser = async () => {
-    const reason = window.prompt("Why are you reporting this user? (e.g., Fake account, inappropriate behavior)");
-    if (!reason) return; 
-
-    try {
-      await addDoc(collection(db, 'reports'), {
-        reportedUserId: id,
-        // UPDATED: Now uses our helper function so the Admin knows exactly who is reported!
-        reportedUserName: getDisplayName(userProfile), 
-        reporterId: currentUser ? currentUser.uid : 'Anonymous', 
-        reason: reason,
-        status: 'Pending',
-        createdAt: new Date()
-      });
-      alert("Report submitted successfully. Our admins will review it.");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to submit report.");
+  const getDisplayName = () => {
+    if (userProfile.firstName || userProfile.lastName) {
+      return `${userProfile.firstName} ${userProfile.lastName}`;
     }
+    return 'PetConnect User';
   };
 
-  const handleBanUser = async () => {
-    const confirmBan = window.confirm(`Are you sure you want to instantly ban ${getDisplayName(userProfile)}?`);
-    if (!confirmBan) return;
-
-    try {
-      await updateDoc(doc(db, 'users', id), { isBanned: true });
-      setUserProfile(prev => ({ ...prev, isBanned: true }));
-      alert("User has been banned successfully.");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to ban user.");
-    }
-  };
-
-  if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading profile...</div>;
-
-  if (!currentUser) {
+  if (loading) {
     return (
-      <div className="text-center mt-20 px-4">
-        <h2 className="text-2xl text-primary font-bold">Please log in to view user profiles.</h2>
-        <p className="text-gray-600 mt-2">We keep our rescuers' profiles secure for registered users only.</p>
-        <button 
-          onClick={() => navigate('/login')} 
-          className="mt-6 bg-secondary text-primary px-8 py-3 rounded-md font-bold hover:bg-opacity-90 transition shadow-sm"
-        >
-          Log In
-        </button>
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-12 w-12 bg-secondary rounded-full mb-4"></div>
+          <p className="text-lg text-primary font-bold tracking-widest uppercase">Loading Profile...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto mt-10 mb-10 px-4">
+    <div className="min-h-screen bg-gray-50 pb-20">
       
-      <div className={`bg-white rounded-lg shadow-md p-8 mb-8 border-t-4 text-center max-w-3xl mx-auto flex flex-col items-center ${userProfile.isBanned ? 'border-red-600' : 'border-secondary'}`}>
-        
+      {/* 1. Consistent Header Banner */}
+      <div className={`h-48 md:h-64 w-full relative ${userProfile.isBanned ? 'bg-red-700' : 'bg-primary'}`}>
         {userProfile.isBanned && (
-          <div className="w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md font-bold mb-6 flex items-center justify-center space-x-2">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            <span>THIS ACCOUNT HAS BEEN BANNED FOR VIOLATING PLATFORM POLICIES.</span>
+          <div className="absolute top-0 w-full bg-red-900 bg-opacity-90 text-white text-center py-2 font-bold uppercase tracking-widest text-xs z-10">
+            This account has been banned
           </div>
-        )}
-
-        {/* UPDATED: Uses getDisplayName for the avatar alt text and initial */}
-        {userProfile.profilePicUrl ? (
-           <img src={userProfile.profilePicUrl} alt={getDisplayName(userProfile)} className={`w-24 h-24 rounded-full object-cover mb-4 border-4 shadow-sm ${userProfile.isBanned ? 'border-red-600 opacity-50 grayscale' : 'border-primary'}`} />
-        ) : (
-           <div className={`w-24 h-24 text-white rounded-full flex items-center justify-center text-4xl font-bold mb-4 shadow-inner uppercase border-4 border-transparent ${userProfile.isBanned ? 'bg-red-800 opacity-50' : 'bg-primary'}`}>
-             {getDisplayName(userProfile).charAt(0)}
-           </div>
-        )}
-        
-        {/* UPDATED: Uses getDisplayName for the big header name */}
-        <h2 className={`text-3xl font-bold ${userProfile.isBanned ? 'text-red-700 line-through' : 'text-primary'}`}>
-          {getDisplayName(userProfile)}
-        </h2>
-        
-        {userProfile.bio ? (
-           <p className="text-gray-700 mt-4 max-w-lg italic">"{userProfile.bio}"</p>
-        ) : (
-           <p className="text-gray-500 mt-2 font-medium">Dedicated PetConnect Rescuer</p>
-        )}
-
-        {currentUser && currentUser.uid === id && (
-          <Link 
-            to="/edit-profile" 
-            className="mt-6 bg-secondary text-primary font-bold py-2 px-8 rounded hover:bg-opacity-90 transition shadow-sm"
-          >
-            Edit Profile
-          </Link>
-        )}
-
-        {!userProfile.isBanned && (!currentUser || currentUser.uid !== id) && (
-          isAdmin ? (
-            <button 
-              onClick={handleBanUser}
-              className="mt-4 bg-red-600 text-white font-bold py-2 px-6 rounded-md shadow-sm hover:bg-red-700 transition"
-            >
-              Ban User
-            </button>
-          ) : (
-            <button 
-              onClick={handleReportUser}
-              className="mt-4 text-xs text-red-500 font-bold hover:underline"
-            >
-              Flag / Report User
-            </button>
-          )
         )}
       </div>
 
-      <h3 className="text-2xl font-bold text-primary mb-6 border-b-2 border-secondary pb-2 max-w-7xl mx-auto">
-        Pets Up For Adoption
-      </h3>
-
-      {userProfile.isBanned ? (
-         <div className="bg-red-50 p-8 rounded-lg shadow-sm max-w-7xl mx-auto text-center border border-red-200">
-           <p className="text-red-600 font-bold text-lg">
-             Pets posted by banned accounts are no longer visible.
-           </p>
-         </div>
-      ) : pets.length === 0 ? (
-        <p className="text-center text-gray-500 text-lg bg-white p-8 rounded-lg shadow-sm max-w-7xl mx-auto">
-          This rescuer doesn't have any pets currently available for adoption. Check back later!
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-          {pets.map((pet) => (
-            <div key={pet.id} className="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-secondary flex flex-col relative">
-              <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold shadow-md uppercase tracking-wide bg-green-400 text-green-900">
-                {pet.status || 'Available'}
+      {/* Main Content Area */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-24 md:-mt-32 relative z-10">
+        
+        {/* 2. Profile Details Card */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 md:p-10 flex flex-col items-center text-center border-t-4 border-secondary">
+          
+          {/* Overlapping Profile Picture */}
+          <div className="-mt-20 md:-mt-28 mb-4">
+            {userProfile.profilePicUrl ? (
+              <img 
+                src={userProfile.profilePicUrl} 
+                alt={getDisplayName()} 
+                className={`w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 bg-white shadow-md ${userProfile.isBanned ? 'border-red-500 opacity-70' : 'border-white'}`} 
+              />
+            ) : (
+              <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full flex items-center justify-center text-5xl md:text-6xl font-bold border-4 bg-white shadow-md ${userProfile.isBanned ? 'border-red-500 text-red-700 opacity-70' : 'border-white text-primary bg-tertiary'}`}>
+                {getDisplayName().charAt(0)}
               </div>
+            )}
+          </div>
+          
+          {/* User Details */}
+          <h1 className={`text-3xl md:text-4xl font-extrabold mb-3 ${userProfile.isBanned ? 'text-red-600' : 'text-primary'}`}>
+            {getDisplayName()}
+          </h1>
+          
+          <p className="text-gray-600 max-w-2xl text-base md:text-lg italic mb-6">
+            "{userProfile.bio || 'Dedicated PetConnect Member'}"
+          </p>
+          
+          {/* Contact & Actions Container */}
+          {(isAdmin || (currentUser && currentUser.uid === id)) && (
+            <div className="flex flex-col items-center gap-4 w-full">
+               
+               {/* Contact Badges using Theme Colors */}
+               <div className="flex flex-wrap justify-center gap-3">
+                 <span className="bg-tertiary bg-opacity-30 text-primary px-4 py-1.5 rounded-full text-sm font-bold">
+                   📞 {userProfile.phone || 'No phone'}
+                 </span>
+                 <span className="bg-tertiary bg-opacity-30 text-primary px-4 py-1.5 rounded-full text-sm font-bold">
+                   ✉️ {userProfile.email}
+                 </span>
+               </div>
 
-              <img src={pet.imageUrl} alt={pet.name} className="w-full h-48 object-cover" />
-              
-              <div className="p-4 flex-grow flex flex-col">
-                <h3 className="text-xl font-bold text-primary mb-1">{pet.name}</h3>
-                <p className="text-gray-600 text-sm mb-2">{pet.species} • {pet.age}</p>
-                <p className="text-gray-700 text-sm line-clamp-2 mb-4 flex-grow">{pet.description}</p>
-                <Link to={`/pet/${pet.id}`} className="block text-center w-full bg-tertiary text-primary font-bold py-2 px-4 rounded hover:bg-opacity-90 transition mt-auto">
-                  View Details
-                </Link>
-              </div>
+               {/* Edit Button using Theme Colors */}
+               {currentUser && currentUser.uid === id && (
+                 <Link 
+                   to="/edit-profile" 
+                   className="mt-2 bg-secondary text-primary font-bold py-2.5 px-8 rounded hover:bg-opacity-90 transition shadow-sm"
+                 >
+                   Edit Profile
+                 </Link>
+               )}
             </div>
-          ))}
+          )}
+
+          {/* 3. Underline Tabs */}
+          <div className="flex w-full justify-center mt-10 border-b border-gray-200">
+            <button 
+              onClick={() => setActiveTab('posted')}
+              className={`px-6 py-4 font-bold text-sm md:text-base transition-colors border-b-4 -mb-px ${activeTab === 'posted' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+            >
+              Pets Posted <span className="ml-1 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">{postedPets.length}</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('adopted')}
+              className={`px-6 py-4 font-bold text-sm md:text-base transition-colors border-b-4 -mb-px ${activeTab === 'adopted' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+            >
+              Adoption History <span className="ml-1 bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs">{adoptedPets.length}</span>
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* Tab Content Areas */}
+        <div className="mt-8">
+          {activeTab === 'posted' && (
+            <div>
+              {postedPets.length === 0 ? (
+                <div className="py-12 text-center bg-transparent">
+                  <p className="text-gray-500 text-lg">No pets posted for adoption yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {postedPets.map((pet) => (
+                    <PetCard key={pet.id} pet={pet} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'adopted' && (
+            <div>
+              {adoptedPets.length === 0 ? (
+                <div className="py-12 text-center bg-transparent">
+                  <p className="text-gray-500 text-lg">No recorded adoption history yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {adoptedPets.map((pet) => (
+                    <PetCard key={pet.id} pet={pet} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// 4. RESTORED: Exactly matching your PetCard CSS from the screenshot!
+function PetCard({ pet }) {
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-secondary flex flex-col relative">
+      
+      {/* Restored Status Badge */}
+      <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold shadow-md uppercase tracking-wide bg-green-400 text-green-900 z-10">
+        {pet.status || 'Available'}
+      </div>
+
+      <img 
+        src={pet.imageUrls && pet.imageUrls.length > 0 ? pet.imageUrls[0] : pet.imageUrl} 
+        alt={pet.name} 
+        className="w-full h-48 object-cover" 
+      />
+      
+      <div className="p-4 flex-grow flex flex-col">
+        <h3 className="text-xl font-bold text-primary mb-1">{pet.name}</h3>
+        <p className="text-gray-600 text-sm mb-2">{pet.species} • {pet.age}</p>
+        <p className="text-gray-700 text-sm line-clamp-2 mb-4 flex-grow">{pet.description}</p>
+        
+        {/* Restored Button CSS */}
+        <Link 
+          to={`/pet/${pet.id}`} 
+          className="block text-center w-full bg-secondary text-primary font-bold py-2 px-4 rounded hover:bg-opacity-90 transition"
+        >
+          View Profile
+        </Link>
+      </div>
     </div>
   );
 }
