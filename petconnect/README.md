@@ -1,4 +1,5 @@
 # PetConnect - Pet Adoption Website
+<img width="2816" height="1536" alt="Architecture" src="https://github.com/user-attachments/assets/f97fc0d5-296e-4b2c-af94-660ae49018df" />
 
 PetConnect is a comprehensive web-based platform designed to facilitate pet adoptions by connecting potential adopters with pets in need of loving homes. The application provides a user-friendly interface for browsing pets, managing adoption requests, and streamlining the overall adoption process.
 
