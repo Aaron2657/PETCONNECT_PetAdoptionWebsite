@@ -205,12 +205,10 @@ export default function UserProfile() {
   );
 }
 
-// 4. RESTORED: Exactly matching your PetCard CSS from the screenshot!
 function PetCard({ pet }) {
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-secondary flex flex-col relative">
       
-      {/* Restored Status Badge */}
       <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold shadow-md uppercase tracking-wide bg-green-400 text-green-900 z-10">
         {pet.status || 'Available'}
       </div>
@@ -226,7 +224,6 @@ function PetCard({ pet }) {
         <p className="text-gray-600 text-sm mb-2">{pet.species} • {pet.age}</p>
         <p className="text-gray-700 text-sm line-clamp-2 mb-4 flex-grow">{pet.description}</p>
         
-        {/* Restored Button CSS */}
         <Link 
           to={`/pet/${pet.id}`} 
           className="block text-center w-full bg-secondary text-primary font-bold py-2 px-4 rounded hover:bg-opacity-90 transition"
