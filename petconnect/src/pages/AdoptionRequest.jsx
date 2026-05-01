@@ -16,8 +16,9 @@ export default function AdoptionRequest() {
   const [success, setSuccess] = useState(false);
   const [hasApplied, setHasApplied] = useState(false);
   
-  // NEW: State to block admins
   const [isAdmin, setIsAdmin] = useState(false);
+  // State to block requests if the rescuer is banned
+  const [isRescuerBanned, setIsRescuerBanned] = useState(false);
 
   const [message, setMessage] = useState('');
   const [livingSituation, setLivingSituation] = useState('House with yard');
@@ -29,7 +30,15 @@ export default function AdoptionRequest() {
         const docRef = doc(db, 'pets', id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setPet({ id: docSnap.id, ...docSnap.data() });
+          const petData = { id: docSnap.id, ...docSnap.data() };
+          setPet(petData);
+
+          // Check if the rescuer is banned
+          const rescuerDoc = await getDoc(doc(db, 'users', petData.rescuerId));
+          if (rescuerDoc.exists() && rescuerDoc.data().isBanned) {
+            setIsRescuerBanned(true);
+          }
+
         } else {
           setError("Pet not found!");
           setLoading(false);
@@ -37,12 +46,11 @@ export default function AdoptionRequest() {
         }
 
         if (currentUser) {
-          // NEW: Check for admin status
           const viewerDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (viewerDoc.exists() && viewerDoc.data().role === 'admin') {
             setIsAdmin(true);
             setLoading(false);
-            return; // Stop checking further if they are an admin
+            return; 
           }
 
           const applicationQuery = query(
@@ -76,7 +84,6 @@ export default function AdoptionRequest() {
     );
   }
 
-  // NEW: Hard block for Admins
   if (isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center mt-20 text-center px-4">
@@ -87,6 +94,23 @@ export default function AdoptionRequest() {
           </p>
           <Link to="/admin" className="bg-red-600 text-white px-6 py-3 rounded font-bold hover:bg-red-700 transition shadow-sm">
             Return to Admin Panel
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  //Hard block if the rescuer is banned
+  if (isRescuerBanned) {
+    return (
+      <div className="flex flex-col items-center justify-center mt-20 text-center px-4">
+        <div className="bg-red-50 border-t-4 border-red-600 p-8 rounded-lg shadow-md max-w-lg w-full">
+          <h2 className="text-3xl text-red-800 font-bold mb-4">Action Restricted</h2>
+          <p className="text-lg text-red-700 mb-6">
+            You cannot submit an adoption request for this pet because the rescuer's account has been suspended by an Administrator.
+          </p>
+          <Link to="/browse" className="bg-red-600 text-white px-6 py-3 rounded font-bold hover:bg-red-700 transition shadow-sm">
+            Browse Other Pets
           </Link>
         </div>
       </div>
@@ -185,24 +209,13 @@ export default function AdoptionRequest() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-gray-700 font-semibold mb-2">Why would you be a good fit for {pet.name}?</label>
-            <textarea 
-              value={message} 
-              onChange={(e) => setMessage(e.target.value)} 
-              required 
-              rows="4" 
-              placeholder="Tell the rescuer a little bit about yourself and why you want to adopt this pet..."
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
-            ></textarea>
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows="4" placeholder="Tell the rescuer a little bit about yourself and why you want to adopt this pet..." className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"></textarea>
           </div>
 
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
             <div className="w-full sm:w-1/2">
               <label className="block text-gray-700 font-semibold mb-2">Living Situation</label>
-              <select 
-                value={livingSituation} 
-                onChange={(e) => setLivingSituation(e.target.value)} 
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
-              >
+              <select value={livingSituation} onChange={(e) => setLivingSituation(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary">
                 <option value="House with yard">House with yard</option>
                 <option value="House without yard">House without yard</option>
                 <option value="Apartment/Condo">Apartment / Condo</option>
@@ -211,11 +224,7 @@ export default function AdoptionRequest() {
             
             <div className="w-full sm:w-1/2">
               <label className="block text-gray-700 font-semibold mb-2">Do you have other pets?</label>
-              <select 
-                value={hasOtherPets} 
-                onChange={(e) => setHasOtherPets(e.target.value)} 
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"
-              >
+              <select value={hasOtherPets} onChange={(e) => setHasOtherPets(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary">
                 <option value="No">No</option>
                 <option value="Yes - Dogs">Yes - Dogs</option>
                 <option value="Yes - Cats">Yes - Cats</option>
@@ -228,11 +237,7 @@ export default function AdoptionRequest() {
             <strong>Note:</strong> By submitting this request, your contact information (Email, Name, and Phone Number) will be shared with the rescuer so they can reach out to you.
           </div>
           
-          <button 
-            disabled={submitting} 
-            type="submit" 
-            className="w-full bg-secondary text-primary font-bold py-3 px-4 rounded hover:bg-opacity-90 transition disabled:opacity-50 mt-6 shadow-sm"
-          >
+          <button disabled={submitting} type="submit" className="w-full bg-secondary text-primary font-bold py-3 px-4 rounded hover:bg-opacity-90 transition disabled:opacity-50 mt-6 shadow-sm">
             {submitting ? 'Sending Application...' : 'Submit Adoption Request'}
           </button>
         </form>

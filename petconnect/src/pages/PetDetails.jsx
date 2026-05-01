@@ -16,8 +16,9 @@ export default function PetDetails() {
   const [isApprovedAdopter, setIsApprovedAdopter] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
-  // NEW: Track if the viewer is an admin
   const [isAdmin, setIsAdmin] = useState(false);
+  // State to check if the rescuer is banned
+  const [isRescuerBanned, setIsRescuerBanned] = useState(false);
 
   useEffect(() => {
     const fetchPetAndStatus = async () => {
@@ -31,7 +32,13 @@ export default function PetDetails() {
 
           const rescuerDoc = await getDoc(doc(db, 'users', petData.rescuerId));
           if (rescuerDoc.exists()) {
-            setRescuerPhone(rescuerDoc.data().phone || rescuerDoc.data().phoneNumber || 'Not provided');
+            const rescuerData = rescuerDoc.data();
+            setRescuerPhone(rescuerData.phone || rescuerData.phoneNumber || 'Not provided');
+            
+            //Set the banned status
+            if (rescuerData.isBanned) {
+              setIsRescuerBanned(true);
+            }
           }
         } else {
           setError("Pet not found! They may have been removed.");
@@ -40,7 +47,6 @@ export default function PetDetails() {
         }
 
         if (currentUser) {
-          // NEW: Check if the logged-in user is an admin
           const viewerDoc = await getDoc(doc(db, 'users', currentUser.uid));
           if (viewerDoc.exists() && viewerDoc.data().role === 'admin') {
             setIsAdmin(true);
@@ -103,9 +109,16 @@ export default function PetDetails() {
         &larr; Back to Browse
       </Link>
       
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden border-t-4 border-primary flex flex-col md:flex-row">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border-t-4 border-primary flex flex-col md:flex-row relative">
         
-        <div className="md:w-1/2 relative bg-gray-100 min-h-[300px] md:min-h-[500px] flex items-center justify-center overflow-hidden">
+        {/* NEW: If rescuer is banned, dim the whole card slightly and show a warning banner at the top */}
+        {isRescuerBanned && (
+          <div className="absolute top-0 w-full bg-red-600 text-white text-center py-1.5 font-bold uppercase tracking-widest text-xs z-20 shadow-md">
+            The rescuer who posted this pet has been suspended
+          </div>
+        )}
+
+        <div className={`md:w-1/2 relative bg-gray-100 min-h-[300px] md:min-h-[500px] flex items-center justify-center overflow-hidden ${isRescuerBanned ? 'opacity-80 grayscale mt-6' : ''}`}>
           <img 
             src={petImages[currentImageIndex]} 
             alt={`${pet.name} - Photo ${currentImageIndex + 1}`} 
@@ -114,33 +127,18 @@ export default function PetDetails() {
           
           {petImages.length > 1 && (
             <>
-              <button 
-                onClick={prevImage}
-                className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md"
-              >
-                &#10094;
-              </button>
-              
-              <button 
-                onClick={nextImage}
-                className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md"
-              >
-                &#10095;
-              </button>
-
+              <button onClick={prevImage} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md">&#10094;</button>
+              <button onClick={nextImage} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md">&#10095;</button>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
                 {petImages.map((_, idx) => (
-                  <div 
-                    key={idx} 
-                    className={`w-2.5 h-2.5 rounded-full transition-colors shadow-sm ${idx === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
-                  />
+                  <div key={idx} className={`w-2.5 h-2.5 rounded-full transition-colors shadow-sm ${idx === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}/>
                 ))}
               </div>
             </>
           )}
         </div>
         
-        <div className="p-8 md:w-1/2 flex flex-col">
+        <div className={`p-8 md:w-1/2 flex flex-col ${isRescuerBanned ? 'mt-6' : ''}`}>
           <div className="flex justify-between items-start mb-4">
             <h2 className="text-4xl font-bold text-primary">{pet.name}</h2>
             <span className="bg-green-100 text-green-800 text-sm font-bold px-3 py-1 rounded-full border border-green-200">
@@ -162,15 +160,15 @@ export default function PetDetails() {
             <h4 className="font-bold text-primary mb-3 border-b border-blue-200 pb-2">Rescuer Information</h4>
             <p className="text-sm text-gray-700 mb-3">
                 <strong>Posted By:</strong>{' '}
-                <Link to={`/user/${pet.rescuerId}`} className="text-secondary font-bold hover:underline">
-                  {pet.rescuerName || 'Anonymous'}
+                <Link to={`/user/${pet.rescuerId}`} className={`font-bold hover:underline ${isRescuerBanned ? 'text-red-600' : 'text-secondary'}`}>
+                  {pet.rescuerName || 'Anonymous'} {isRescuerBanned && '(Banned)'}
                 </Link>
             </p>
 
             <div className="space-y-2">
               <p className="text-sm text-gray-700 flex items-center space-x-2 overflow-hidden">
                 <strong>Email:</strong> 
-                {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) ? (
+                {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) && !isRescuerBanned ? (
                   <span className="truncate">{pet.rescuerEmail}</span>
                 ) : (
                   <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
@@ -181,7 +179,7 @@ export default function PetDetails() {
               
               <p className="text-sm text-gray-700 flex items-center space-x-2 overflow-hidden">
                 <strong>Phone:</strong> 
-                {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) ? (
+                {currentUser && (currentUser.uid === pet.rescuerId || isApprovedAdopter) && !isRescuerBanned ? (
                   <span className="truncate">{rescuerPhone}</span>
                 ) : (
                   <span className="italic text-gray-500 bg-gray-200 px-2 py-1 rounded text-[11px] sm:text-xs border border-gray-300 whitespace-nowrap truncate">
@@ -192,22 +190,20 @@ export default function PetDetails() {
             </div>
           </div>
           
-          {/* UPDATED: If they are an admin, lock the button down! */}
+          {/* UPDATED: Strict button rendering logic */}
           {currentUser && currentUser.uid === pet.rescuerId ? (
             <div className="flex space-x-4 mt-auto">
-              <Link 
-                to={`/edit-pet/${pet.id}`} 
-                className="w-1/2 text-center bg-gray-200 text-gray-800 font-bold py-3 rounded hover:bg-gray-300 transition shadow-sm"
-              >
+              <Link to={`/edit-pet/${pet.id}`} className="w-1/2 text-center bg-gray-200 text-gray-800 font-bold py-3 rounded hover:bg-gray-300 transition shadow-sm">
                 Edit Post
               </Link>
-              <button 
-                onClick={handleDelete}
-                className="w-1/2 bg-red-600 text-white font-bold py-3 rounded hover:bg-red-700 transition shadow-sm"
-              >
+              <button onClick={handleDelete} className="w-1/2 bg-red-600 text-white font-bold py-3 rounded hover:bg-red-700 transition shadow-sm">
                 Delete Post
               </button>
             </div>
+          ) : isRescuerBanned ? (
+             <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-4 rounded mt-auto text-center font-bold text-sm shadow-sm">
+               Adoption requests are currently disabled for this pet because the rescuer's account has been suspended by an Administrator.
+             </div>
           ) : isApprovedAdopter ? (
              <div className="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mt-auto text-center font-bold">
                🎉 You are approved to adopt {pet.name}! Please contact the rescuer to finalize.
@@ -217,10 +213,7 @@ export default function PetDetails() {
                Administrative accounts cannot submit adoption requests.
              </div>
           ) : (
-            <Link 
-              to={`/adopt/${pet.id}`} 
-              className="block text-center w-full bg-secondary text-primary font-bold text-lg py-3 rounded hover:bg-opacity-90 transition mt-auto shadow-sm"
-            >
+            <Link to={`/adopt/${pet.id}`} className="block text-center w-full bg-secondary text-primary font-bold text-lg py-3 rounded hover:bg-opacity-90 transition mt-auto shadow-sm">
               Submit Adoption Request
             </Link>
           )}
