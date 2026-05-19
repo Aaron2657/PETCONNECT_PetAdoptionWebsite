@@ -9,13 +9,12 @@ export default function EditPet() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
-  // Form State
+  // Form State (Notice: 'status' has been entirely removed)
   const [name, setName] = useState('');
   const [species, setSpecies] = useState('Dog');
   const [age, setAge] = useState('');
   const [description, setDescription] = useState('');
   
-  // UPDATED: Image State now handles arrays for the carousel!
   const [existingImageUrls, setExistingImageUrls] = useState([]);
   const [newImages, setNewImages] = useState([]);
 
@@ -42,11 +41,9 @@ export default function EditPet() {
           setSpecies(petData.species);
           setAge(petData.age);
           setDescription(petData.description);
-          
-          // Fallback to single imageUrl if it's an older post without an array
-          setExistingImageUrls(petData.imageUrls || [petData.imageUrl]);
+          setExistingImageUrls(petData.imageUrls || (petData.imageUrl ? [petData.imageUrl] : []));
         } else {
-          setError("Pet not found!");
+          setError("Pet not found.");
         }
       } catch (err) {
         console.error(err);
@@ -58,10 +55,8 @@ export default function EditPet() {
 
     if (currentUser) {
       fetchPet();
-    } else {
-      navigate('/login');
     }
-  }, [id, currentUser, navigate]);
+  }, [id, currentUser]);
 
   const handleImageChange = (e) => {
     if (e.target.files) {
@@ -75,97 +70,87 @@ export default function EditPet() {
     setError('');
 
     try {
-      let finalImageUrls = existingImageUrls;
-      let finalImageUrl = existingImageUrls[0]; // The thumbnail is always the first image
+      let finalImageUrls = [...existingImageUrls];
 
-      // If they selected NEW images, upload them all to Cloudinary
       if (newImages.length > 0) {
-        const uploadPromises = newImages.map(async (img) => {
-          const formData = new FormData();
-          formData.append('file', img);
-          formData.append('upload_preset', 'petconnect_uploads'); 
+        finalImageUrls = []; // Reset if they are uploading new photos
+        for (const image of newImages) {
+          const data = new FormData();
+          data.append("file", image);
+          data.append("upload_preset", "petconnect"); 
+          data.append("cloud_name", "dcb3qivh3"); 
 
-          const cloudinaryResponse = await fetch(
-            'https://api.cloudinary.com/v1_1/drvxsajim/image/upload',
-            { method: 'POST', body: formData }
-          );
+          const res = await fetch("https://api.cloudinary.com/v1_1/dcb3qivh3/image/upload", {
+            method: "POST",
+            body: data,
+          });
 
-          if (!cloudinaryResponse.ok) throw new Error("Image upload failed");
-          
-          const imageData = await cloudinaryResponse.json();
-          return imageData.secure_url;
-        });
-
-        finalImageUrls = await Promise.all(uploadPromises);
-        finalImageUrl = finalImageUrls[0]; // Set the new thumbnail
+          const uploadResult = await res.json();
+          finalImageUrls.push(uploadResult.secure_url);
+        }
       }
 
-      // Update the specific document in Firebase
       const petRef = doc(db, 'pets', id);
+      // Update only core details, leaving status up to the application logic
       await updateDoc(petRef, {
         name,
         species,
         age,
         description,
-        imageUrl: finalImageUrl,
-        imageUrls: finalImageUrls, // Save the full array for the carousel
+        imageUrls: finalImageUrls
       });
 
-      // Send them back to the pet's public profile to see the changes
       navigate(`/pet/${id}`);
-      
     } catch (err) {
       console.error(err);
-      setError('Failed to update pet details. Please try again.');
+      setError('Failed to update pet. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <div className="text-center mt-20 text-xl font-bold text-primary">Loading pet details...</div>;
-  if (error) return <div className="text-center mt-20 text-red-500 text-xl font-bold">{error}</div>;
+  if (loading) return <div className="text-center mt-20 text-xl font-semibold text-primary">Loading pet details...</div>;
+  if (error) return <div className="text-center mt-20 text-xl font-semibold text-red-600">{error}</div>;
 
   return (
-    <div className="flex items-center justify-center mt-10 mb-10 px-4">
+    <div className="flex items-center justify-center mt-10 mb-20 px-4">
       <div className="w-full max-w-2xl bg-white p-8 rounded-lg shadow-md border-t-4 border-secondary">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-          <h2 className="text-3xl font-bold text-primary">Edit {name}'s Details</h2>
-          <Link to={`/pet/${id}`} className="text-secondary font-bold hover:underline">Cancel</Link>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          
-          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <div className="w-full sm:w-1/2">
-              <label className="block text-gray-700 font-semibold mb-2">Pet's Name</label>
+        <Link to={`/pet/${id}`} className="text-secondary font-bold hover:underline mb-6 inline-block">
+          &larr; Back to Pet
+        </Link>
+        <h2 className="text-3xl font-bold text-primary mb-6">Edit Pet Listing</h2>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex space-x-4">
+            <div className="w-1/2">
+              <label className="block text-gray-700 font-semibold mb-2">Pet Name</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary" />
             </div>
-            <div className="w-full sm:w-1/2">
+            <div className="w-1/2">
               <label className="block text-gray-700 font-semibold mb-2">Species</label>
               <select value={species} onChange={(e) => setSpecies(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary">
                 <option value="Dog">Dog</option>
                 <option value="Cat">Cat</option>
+                <option value="Bird">Bird</option>
                 <option value="Other">Other</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Age (e.g., "2 Months", "3 Years")</label>
-            <input type="text" value={age} onChange={(e) => setAge(e.target.value)} required className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary" />
+            <label className="block text-gray-700 font-semibold mb-2">Age</label>
+            <input type="text" value={age} onChange={(e) => setAge(e.target.value)} required placeholder="e.g. 2 Months, 3 Years" className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary" />
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Description</label>
+            <label className="block text-gray-700 font-semibold mb-2">Description / Background</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} required rows="4" className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary"></textarea>
           </div>
 
-          {/* UPDATED: Multi-Image Upload Section */}
-          <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-            <label className="block text-gray-700 font-semibold mb-2">Update Photos (Select multiple)</label>
+          <div className="bg-gray-50 p-4 border border-gray-200 rounded-md">
+            <label className="block text-gray-700 font-semibold mb-2">Photos</label>
             
-            {/* Show tiny previews of existing or newly selected images */}
-            <div className="flex items-center space-x-2 mb-4 overflow-x-auto pb-2">
+            <div className="flex space-x-2 mb-4 overflow-x-auto pb-2">
               {newImages.length > 0 
                 ? newImages.map((img, idx) => (
                     <img key={idx} src={URL.createObjectURL(img)} alt={`New preview ${idx}`} className="w-16 h-16 object-cover rounded-md border shadow-sm flex-shrink-0" />
@@ -189,7 +174,7 @@ export default function EditPet() {
           </div>
 
           <button disabled={saving} type="submit" className="w-full bg-secondary text-primary font-bold py-3 px-4 rounded hover:bg-opacity-90 transition mt-6 disabled:opacity-50 shadow-sm">
-            {saving ? 'Saving Changes...' : 'Save Pet Details'}
+            {saving ? 'Saving Changes...' : 'Save Changes'}
           </button>
         </form>
       </div>

@@ -24,10 +24,18 @@ export default function Signup() {
       return setError('Passwords do not match');
     }
 
+    // Ensure they typed exactly 10 digits after the +63
+    if (phoneRef.current.value.length !== 10) {
+      return setError('Please enter a valid 10-digit mobile number (e.g., 9123456789)');
+    }
+
     try {
       setError('');
       setSuccess('');
       setLoading(true);
+      
+      // Combine the prefix with the user's input before sending to database
+      const fullPhoneNumber = `+63${phoneRef.current.value}`;
       
       // 1. Create the account in Firebase
       await signup(
@@ -35,7 +43,7 @@ export default function Signup() {
         passwordRef.current.value,
         firstNameRef.current.value,
         lastNameRef.current.value,
-        phoneRef.current.value
+        fullPhoneNumber
       );
 
       // 2. if Firebase auto-logs them in. We instantly log them out!
@@ -44,41 +52,36 @@ export default function Signup() {
       }
 
       // 3. Show the success message
-      setSuccess('Account created successfully! Please login your new account...');
+      setSuccess('Account created successfully! Redirecting to login...');
       
-      // 4. Wait 2 seconds so the user can read the message, then redirect
+      // 4. Redirect after 2 seconds
       setTimeout(() => {
         navigate('/login');
       }, 2000);
 
     } catch (err) {
-      setError('Failed to create an account: ' + err.message);
-      setLoading(false); // We only stop loading if there is an error
+      console.error(err);
+      setError('Failed to create an account. ' + (err.message || ''));
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="flex items-center justify-center mt-10 mb-10 px-4">
-      <div className="w-full max-w-lg bg-white p-8 rounded-lg shadow-md border-t-4 border-secondary">
-        <h2 className="text-3xl font-bold text-center text-primary mb-6">Create an Account</h2>
+    <div className="flex items-center justify-center mt-10 mb-20 px-4">
+      <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md border-t-4 border-primary">
+        <h2 className="text-3xl font-bold text-center text-primary mb-6">Create Account</h2>
         
-        {/* Error Message */}
         {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-        
-        {/* Success Message */}
-        {success && (
-          <div className="bg-green-100 border border-green-500 text-green-800 px-4 py-3 rounded mb-4 font-bold text-center shadow-sm">
-            {success}
-          </div>
-        )}
+        {success && <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 font-bold">{success}</div>}
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <div className="w-full sm:w-1/2">
+          <div className="flex space-x-4">
+            <div className="w-1/2">
               <label className="block text-gray-700 font-semibold mb-2">First Name</label>
               <input type="text" ref={firstNameRef} required disabled={success !== ''} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary disabled:bg-gray-100" />
             </div>
-            <div className="w-full sm:w-1/2">
+            <div className="w-1/2">
               <label className="block text-gray-700 font-semibold mb-2">Last Name</label>
               <input type="text" ref={lastNameRef} required disabled={success !== ''} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary disabled:bg-gray-100" />
             </div>
@@ -86,15 +89,21 @@ export default function Signup() {
 
           <div>
             <label className="block text-gray-700 font-semibold mb-2">Phone Number</label>
-            <input 
-              type="tel" 
-              ref={phoneRef} 
-              onInput={(e) => e.target.value = e.target.value.replace(/[^0-9]/g, '')}
-              required 
-              disabled={success !== ''} 
-              placeholder="e.g. 09123456789" 
-              className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-tertiary disabled:bg-gray-100" 
-            />
+            <div className="flex shadow-sm">
+              <span className="inline-flex items-center px-4 py-2 border border-r-0 border-gray-300 bg-gray-100 text-gray-700 rounded-l-md font-bold">
+                +63
+              </span>
+              <input 
+                type="tel" 
+                ref={phoneRef} 
+                required 
+                disabled={success !== ''} 
+                maxLength="10"
+                placeholder="9123456789"
+                onChange={(e) => e.target.value = e.target.value.replace(/[^0-9]/g, '')} // Blocks letters
+                className="w-full px-4 py-2 border rounded-r-md focus:outline-none focus:ring-2 focus:ring-tertiary disabled:bg-gray-100" 
+              />
+            </div>
           </div>
 
           <div>
@@ -115,8 +124,10 @@ export default function Signup() {
           </button>
         </form>
         
-        <div className="text-center mt-6 text-gray-600">
-          Already have an account? <Link to="/login" className="text-secondary font-bold hover:underline">Log In</Link>
+        <div className="text-center mt-6">
+          <p className="text-gray-600">
+            Already have an account? <Link to="/login" className="text-secondary font-semibold hover:underline">Log In</Link>
+          </p>
         </div>
       </div>
     </div>

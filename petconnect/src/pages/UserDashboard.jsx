@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore'; 
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'; 
 import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ export default function UserDashboard() {
   const [sentRequests, setSentRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // NEW: State to track which dashboard sections are open/closed
+  // State to track which dashboard sections are open/closed
   const [expandedSections, setExpandedSections] = useState({
     pets: true,     // Default to open so they see their pets immediately
     received: false,
@@ -24,31 +24,20 @@ export default function UserDashboard() {
 
     const fetchDashboardData = async () => {
       try {
+        // Fetch Pets posted by the user
         const petsQuery = query(collection(db, 'pets'), where('rescuerId', '==', currentUser.uid));
         const petsSnap = await getDocs(petsQuery);
         setMyPets(petsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
+        // Fetch Requests received by the user (Rescuer view)
         const receivedQuery = query(collection(db, 'adoptionRequests'), where('rescuerId', '==', currentUser.uid));
         const receivedSnap = await getDocs(receivedQuery);
         setReceivedRequests(receivedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
+        // Fetch Requests sent by the user (Adopter view)
         const sentQuery = query(collection(db, 'adoptionRequests'), where('adopterId', '==', currentUser.uid));
         const sentSnap = await getDocs(sentQuery);
-        
-        const sentRequestsWithRescuerInfo = await Promise.all(sentSnap.docs.map(async (requestDoc) => {
-          const reqData = { id: requestDoc.id, ...requestDoc.data() };
-          
-          if (reqData.status === 'Approved') {
-            const rescuerDoc = await getDoc(doc(db, 'users', reqData.rescuerId));
-            if (rescuerDoc.exists()) {
-              reqData.rescuerEmail = rescuerDoc.data().email;
-              reqData.rescuerPhone = rescuerDoc.data().phone || rescuerDoc.data().phoneNumber || 'Not provided';
-            }
-          }
-          return reqData;
-        }));
-
-        setSentRequests(sentRequestsWithRescuerInfo);
+        setSentRequests(sentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -60,7 +49,6 @@ export default function UserDashboard() {
     fetchDashboardData();
   }, [currentUser]);
 
-  // NEW: Helper function to toggle individual sections
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -68,254 +56,242 @@ export default function UserDashboard() {
     }));
   };
 
-  const handleUpdateStatus = async (requestId, newStatus) => {
-    try {
-      const requestRef = doc(db, 'adoptionRequests', requestId);
-      await updateDoc(requestRef, { status: newStatus });
-      setReceivedRequests(prevRequests =>
-        prevRequests.map(req => req.id === requestId ? { ...req, status: newStatus } : req)
-      );
-    } catch (error) {
-      console.error("Error updating application status:", error);
-      alert("Failed to update the application. Please try again.");
-    }
-  };
-
-  const handleUpdatePetStatus = async (petId, newStatus) => {
-    try {
-      const petRef = doc(db, 'pets', petId);
-      await updateDoc(petRef, { status: newStatus });
-      
-      setMyPets(prevPets => 
-        prevPets.map(pet => pet.id === petId ? { ...pet, status: newStatus } : pet)
-      );
-    } catch (error) {
-      console.error("Error updating pet status:", error);
-      alert("Failed to update pet status.");
-    }
-  };
-
   const handleDeletePet = async (petId) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this pet? This action cannot be undone.");
-    if (!confirmDelete) return; 
-
-    try {
-      await deleteDoc(doc(db, 'pets', petId));
-      setMyPets(prevPets => prevPets.filter(pet => pet.id !== petId));
-    } catch (error) {
-      console.error("Error deleting pet:", error);
-      alert("Failed to delete the pet. Please try again.");
+    if (window.confirm('Are you sure you want to delete this pet posting? This action cannot be undone.')) {
+      try {
+        await deleteDoc(doc(db, 'pets', petId));
+        setMyPets(myPets.filter(pet => pet.id !== petId));
+      } catch (error) {
+        console.error("Error deleting pet:", error);
+        alert("Failed to delete pet.");
+      }
     }
   };
 
-  if (!currentUser) return <div className="text-center mt-20 text-xl font-bold text-primary">Please log in to view your dashboard.</div>;
-  if (loading) return <div className="text-center mt-20 text-xl text-primary font-semibold">Loading your dashboard...</div>;
+  const handleUpdateRequestStatus = async (requestId, newStatus) => {
+    if (window.confirm(`Are you sure you want to mark this application as ${newStatus}?`)) {
+      try {
+        await updateDoc(doc(db, 'adoptionRequests', requestId), {
+          status: newStatus
+        });
+        
+        // Update local UI state
+        setReceivedRequests(receivedRequests.map(req => 
+          req.id === requestId ? { ...req, status: newStatus } : req
+        ));
+
+      } catch (error) {
+        console.error("Error updating request status:", error);
+        alert("Failed to update status.");
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-12 w-12 bg-secondary rounded-full mb-4"></div>
+          <p className="text-lg text-primary font-bold tracking-widest uppercase">Loading Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto mt-10 mb-10 px-4 max-w-5xl">
-      
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0 mb-8 border-b-2 border-secondary pb-4">
+    <div className="container mx-auto mt-10 mb-20 px-4 max-w-5xl">
+      <div className="flex justify-between items-center mb-8 border-b-2 border-secondary pb-4">
         <h2 className="text-3xl font-bold text-primary">My Dashboard</h2>
-        
-        <Link 
-          to={`/user/${currentUser.uid}`} 
-          className="bg-primary text-white px-6 py-2 rounded-md text-sm font-bold hover:bg-opacity-90 transition shadow-sm whitespace-nowrap text-center"
-        >
-          View Profile
-        </Link>
       </div>
 
-      {/* Section 1: My Posted Pets */}
-      <div className="mb-6">
-        <button 
-          onClick={() => toggleSection('pets')}
-          className="w-full flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-lg shadow-sm hover:bg-gray-100 transition"
-        >
-          <div className="flex items-center space-x-3">
-            <h3 className="text-2xl font-semibold text-primary">My Posted Pets</h3>
-            <span className="bg-secondary text-primary text-xs font-bold px-2 py-1 rounded-full">{myPets.length}</span>
-          </div>
-          <svg className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedSections.pets ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-        </button>
+      <div className="space-y-6">
+        
+        {/* Section 1: My Posted Pets */}
+        <div className="mb-6">
+          <button 
+            onClick={() => toggleSection('pets')}
+            className="w-full flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-lg shadow-sm hover:bg-gray-100 transition"
+          >
+            <div className="flex items-center space-x-3">
+              <h3 className="text-xl font-semibold text-primary">My Posted Pets</h3>
+              <span className="bg-secondary text-primary text-xs font-bold px-2 py-1 rounded-full flex items-center justify-center min-w-[24px] h-6">
+                {myPets.length}
+              </span>
+            </div>
+            <svg className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedSections.pets ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          
+          {expandedSections.pets && (
+            <div className="mt-6 animate-fadeIn">
+              {myPets.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-lg shadow-sm border border-gray-100 text-gray-500">
+                  <p>You haven't posted any pets for adoption yet.</p>
+                  <Link to="/post-pet" className="inline-block mt-4 text-secondary font-bold hover:underline">Post a Pet Now &rarr;</Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {myPets.map(pet => (
+                    <div key={pet.id} className="bg-white rounded-2xl shadow-md overflow-hidden border-t-4 border-secondary flex flex-col relative transition-transform hover:-translate-y-1 hover:shadow-xl">
+                      
+                      {/* Read-Only Status Badge replacing the old dropdown */}
+                      <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold shadow-md uppercase tracking-wide bg-green-400 text-green-900 z-10">
+                        {pet.status || 'Available'}
+                      </div>
 
-        {expandedSections.pets && (
-          <div className="mt-4 animate-fadeIn">
-            {myPets.length === 0 ? (
-              <p className="text-gray-500 bg-white p-4 rounded-lg shadow-sm border border-gray-100">You haven't posted any pets yet.</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {myPets.map(pet => (
-                  <div key={pet.id} className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-tertiary flex items-center space-x-4">
-                    <img src={pet.imageUrl} alt={pet.name} className="w-24 h-24 object-cover rounded-md" />
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-lg text-primary">{pet.name}</h4>
+                      <img 
+                        src={pet.imageUrls && pet.imageUrls.length > 0 ? pet.imageUrls[0] : pet.imageUrl} 
+                        alt={pet.name} 
+                        className="w-full h-48 object-cover" 
+                      />
                       
-                      <p className="text-sm text-gray-600 mb-2">Status: 
-                        <span className={`ml-1 font-bold ${
-                          pet.status === 'Adopted' ? 'text-secondary' : 
-                          pet.status === 'Pending' ? 'text-yellow-600' : 'text-green-600'
-                        }`}>
-                          {pet.status || 'Available'}
-                        </span>
-                      </p>
-                      
-                      <div className="flex flex-col space-y-2 mt-2">
-                        <select 
-                          value={pet.status || 'Available'}
-                          onChange={(e) => handleUpdatePetStatus(pet.id, e.target.value)}
-                          className="text-sm border border-gray-300 rounded px-2 py-1 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-tertiary w-full max-w-[150px]"
-                        >
-                          <option value="Available">Available</option>
-                          <option value="Pending">Pending</option>
-                          <option value="Adopted">Adopted</option>
-                        </select>
+                      <div className="p-5 flex-grow flex flex-col">
+                        <h4 className="text-xl font-extrabold text-primary mb-1">{pet.name}</h4>
+                        <p className="text-sm text-gray-500 font-medium mb-4">{pet.species} • {pet.age}</p>
                         
-                        <div className="flex items-center space-x-3 pt-2">
-                          <Link to={`/pet/${pet.id}`} className="text-tertiary text-sm font-bold hover:underline leading-none">View</Link>
-                          <span className="text-gray-300 leading-none">|</span>
-                          <Link to={`/edit-pet/${pet.id}`} className="text-blue-500 text-sm font-bold hover:underline leading-none">Edit</Link>
-                          <span className="text-gray-300 leading-none">|</span>
-                          <button 
-                            onClick={() => handleDeletePet(pet.id)} 
-                            className="text-red-500 text-sm font-bold hover:underline leading-none"
-                          >
+                        <div className="mt-auto flex space-x-2 border-t border-gray-100 pt-4">
+                          <Link to={`/edit-pet/${pet.id}`} className="flex-1 bg-gray-100 text-gray-800 text-center py-2.5 rounded-xl font-bold text-sm hover:bg-gray-200 transition shadow-sm">
+                            Edit Pet
+                          </Link>
+                          <button onClick={() => handleDeletePet(pet.id)} className="flex-1 bg-red-50 text-red-600 text-center py-2.5 rounded-xl font-bold text-sm hover:bg-red-100 transition shadow-sm border border-red-100">
                             Delete
                           </button>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-      {/* Section 2: Received Applications */}
-      <div className="mb-6">
-        <button 
-          onClick={() => toggleSection('received')}
-          className="w-full flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-lg shadow-sm hover:bg-gray-100 transition"
-        >
-          <div className="flex items-center space-x-3">
-            <h3 className="text-2xl font-semibold text-primary">Applications Received</h3>
-            <span className="bg-secondary text-primary text-xs font-bold px-2 py-1 rounded-full">{receivedRequests.length}</span>
-          </div>
-          <svg className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedSections.received ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-        </button>
-
-        {expandedSections.received && (
-          <div className="mt-4 animate-fadeIn">
-            {receivedRequests.length === 0 ? (
-              <p className="text-gray-500 bg-white p-4 rounded-lg shadow-sm border border-gray-100">No one has applied for your pets yet.</p>
-            ) : (
-              <div className="space-y-4">
-                {receivedRequests.map(req => (
-                  <div key={req.id} className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-secondary">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="font-bold text-lg text-primary">Application for {req.petName}</h4>
-                        <div className="mt-1 text-sm text-gray-700">
-                          <p><strong>From:</strong> {req.adopterName} ({req.adopterEmail})</p>
-                          <p className="mt-1"><strong>Phone:</strong> {req.adopterPhone || 'Not provided'}</p>
+        {/* Section 2: Received Adoption Applications (For Rescuers) */}
+        <div className="mb-6">
+          <button 
+            onClick={() => toggleSection('received')}
+            className="w-full flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-lg shadow-sm hover:bg-gray-100 transition"
+          >
+            <div className="flex items-center space-x-3">
+              <h3 className="text-xl font-semibold text-primary">Applications Received</h3>
+              <span className="bg-tertiary text-primary text-xs font-bold px-2 py-1 rounded-full flex items-center justify-center min-w-[24px] h-6">
+                {receivedRequests.length}
+              </span>
+            </div>
+            <svg className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedSections.received ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          
+          {expandedSections.received && (
+            <div className="mt-6 animate-fadeIn">
+              {receivedRequests.length === 0 ? (
+                <p className="text-gray-500 text-center py-4 bg-white rounded-lg shadow-sm border border-gray-100">No one has applied for your pets yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {receivedRequests.map(req => (
+                    <div key={req.id} className="bg-white border-l-4 border-secondary p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-transform hover:-translate-y-1 hover:shadow-md">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <h4 className="text-xl font-bold text-primary">Application for: <Link to={`/pet/${req.petId}`} className="text-secondary hover:underline">{req.petName}</Link></h4>
+                          <span className={`text-[10px] font-extrabold px-3 py-1 rounded shadow-sm uppercase tracking-wider
+                            ${req.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                              req.status === 'Rejected' ? 'bg-red-100 text-red-700' : 
+                              'bg-yellow-100 text-yellow-700'}`}>
+                            {req.status}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 space-y-1.5 bg-gray-50 p-4 rounded-md border border-gray-100">
+                          <p><strong className="text-gray-800">Applicant:</strong> <Link to={`/user/${req.adopterId}`} className="text-blue-500 hover:underline font-semibold">{req.adopterName}</Link></p>
+                          <p><strong className="text-gray-800">Email:</strong> {req.adopterEmail}</p>
+                          <p><strong className="text-gray-800">Phone:</strong> {req.adopterPhone}</p>
+                          <p><strong className="text-gray-800">Living Situation:</strong> {req.livingSituation}</p>
+                          <p><strong className="text-gray-800">Other Pets:</strong> {req.hasOtherPets}</p>
+                        </div>
+                        <div className="mt-4 bg-blue-50 p-4 rounded-md text-sm italic text-gray-700 border border-blue-100">
+                          "{req.message}"
                         </div>
                       </div>
-                      <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
-                        ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
-                          req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
-                          'bg-yellow-100 text-yellow-800'}`}>
-                        {req.status}
-                      </span>
+                      
+                      {/* Action Buttons for Rescuer */}
+                      {req.status === 'Pending' && (
+                        <div className="flex flex-row md:flex-col gap-3 w-full md:w-36">
+                          <button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="flex-1 bg-green-500 text-white font-bold py-3 px-4 rounded-xl hover:bg-green-600 transition text-sm text-center shadow-sm">
+                            Approve
+                          </button>
+                          <button onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="flex-1 bg-red-500 text-white font-bold py-3 px-4 rounded-xl hover:bg-red-600 transition text-sm text-center shadow-sm">
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    
-                    <div className="bg-gray-50 p-4 rounded border border-gray-100 mb-4">
-                      <p className="text-sm text-gray-700"><strong>Message:</strong> "{req.message}"</p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:space-x-6 text-sm text-gray-600 mb-4 space-y-2 sm:space-y-0">
-                      <span><strong>Living Situation:</strong> {req.livingSituation}</span>
-                      <span><strong>Other Pets:</strong> {req.hasOtherPets}</span>
-                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-                    {req.status === 'Pending' && (
-                      <div className="flex space-x-3 border-t pt-4">
-                        <button 
-                          onClick={() => handleUpdateStatus(req.id, 'Approved')}
-                          className="bg-green-500 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-600 transition shadow-sm"
-                        >
-                          Accept Application
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateStatus(req.id, 'Rejected')}
-                          className="bg-red-500 text-white px-4 py-2 rounded text-sm font-bold hover:bg-red-600 transition shadow-sm"
-                        >
-                          Reject
-                        </button>
+        {/* Section 3: My Sent Applications (For Adopters) */}
+        <div className="mb-6">
+          <button 
+            onClick={() => toggleSection('sent')}
+            className="w-full flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-lg shadow-sm hover:bg-gray-100 transition"
+          >
+            <div className="flex items-center space-x-3">
+              <h3 className="text-xl font-semibold text-primary">My Submitted Applications</h3>
+              <span className="bg-primary text-white text-xs font-bold px-2 py-1 rounded-full flex items-center justify-center min-w-[24px] h-6">
+                {sentRequests.length}
+              </span>
+            </div>
+            <svg className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedSections.sent ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          
+          {expandedSections.sent && (
+            <div className="mt-6 animate-fadeIn">
+              {sentRequests.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-lg shadow-sm border border-gray-100 text-gray-500">
+                  <p>You haven't submitted any adoption applications yet.</p>
+                  <Link to="/browse" className="inline-block mt-4 text-primary font-bold hover:underline">Find a Pet to Adopt &rarr;</Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {sentRequests.map(req => (
+                    <div key={req.id} className="bg-white border-t-4 border-primary rounded-2xl shadow-md p-6 flex flex-col h-full hover:-translate-y-1 hover:shadow-xl transition-transform">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Application For</p>
+                          <h4 className="text-xl font-extrabold text-primary">{req.petName}</h4>
+                          <p className="text-sm text-gray-500 mt-2 italic">"{req.message.substring(0, 60)}..."</p>
+                        </div>
+                        <span className={`text-[10px] font-extrabold px-3 py-1.5 rounded shadow-sm uppercase tracking-wide
+                            ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
+                              req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
+                              'bg-yellow-100 text-yellow-800'}`}>
+                          {req.status}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+
+                      {req.status === 'Approved' && (
+                        <div className="bg-green-50 border border-green-200 p-4 rounded-xl mb-4 mt-2 flex-grow shadow-sm">
+                          <p className="text-sm text-green-800 font-extrabold mb-3">🎉 Approved! Contact the rescuer:</p>
+                          <p className="text-sm text-gray-800 mb-1"><strong>Name:</strong> {req.rescuerName}</p>
+                          <p className="text-sm text-gray-800 mb-1"><strong>Email:</strong> {req.rescuerEmail}</p>
+                          <p className="text-sm text-gray-800"><strong>Phone:</strong> {req.rescuerPhone}</p>
+                        </div>
+                      )}
+
+                      <div className="mt-auto pt-5 border-t border-gray-100">
+                        <Link to={`/pet/${req.petId}`} className="block text-center w-full bg-gray-100 text-gray-800 font-bold py-2.5 px-4 rounded-xl hover:bg-gray-200 transition shadow-sm">
+                          View Pet Post &rarr;
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
-
-      {/* Section 3: Sent Applications */}
-      <div className="mb-6">
-        <button 
-          onClick={() => toggleSection('sent')}
-          className="w-full flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-lg shadow-sm hover:bg-gray-100 transition"
-        >
-          <div className="flex items-center space-x-3">
-            <h3 className="text-2xl font-semibold text-primary">My Adoption Applications</h3>
-            <span className="bg-secondary text-primary text-xs font-bold px-2 py-1 rounded-full">{sentRequests.length}</span>
-          </div>
-          <svg className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedSections.sent ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-        </button>
-
-        {expandedSections.sent && (
-          <div className="mt-4 animate-fadeIn">
-            {sentRequests.length === 0 ? (
-              <p className="text-gray-500 bg-white p-4 rounded-lg shadow-sm border border-gray-100">You haven't applied to adopt any pets yet.</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sentRequests.map(req => (
-                  <div key={req.id} className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-primary flex flex-col">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="font-bold text-primary text-lg">Applied for: {req.petName}</h4>
-                        <p className="text-sm text-gray-500 mt-1">Message: {req.message.substring(0, 60)}...</p>
-                      </div>
-                      <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide
-                          ${req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
-                            req.status === 'Rejected' ? 'bg-red-100 text-red-800' : 
-                            'bg-yellow-100 text-yellow-800'}`}>
-                        {req.status}
-                      </span>
-                    </div>
-
-                    {req.status === 'Approved' && (
-                      <div className="bg-green-50 border border-green-200 p-4 rounded-md mb-4 mt-2">
-                        <p className="text-sm text-green-800 font-bold mb-2">🎉 Approved! Contact the rescuer:</p>
-                        <p className="text-sm text-gray-700"><strong>Email:</strong> {req.rescuerEmail}</p>
-                        <p className="text-sm text-gray-700"><strong>Phone:</strong> {req.rescuerPhone}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-auto pt-4 border-t border-gray-100">
-                      <Link to={`/pet/${req.petId}`} className="text-secondary font-bold text-sm hover:underline flex items-center">
-                        View Pet Post &rarr;
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
     </div>
   );
 }
